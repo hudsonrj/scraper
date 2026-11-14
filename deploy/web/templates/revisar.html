@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Revisar a prova{% endblock %}
+{% block body %}
+<h1>Revisar a prova</h1>
+<p class="lead">Este é o trabalho humano do loop: dizer qual é o tema certo. Só rótulos revisados contam para a nota.</p>
+<div class="stats">
+  <div><span class="v">{{ done }}</span><span class="l">revisados</span></div>
+  <div><span class="v">{{ left }}</span><span class="l">faltam</span></div>
+</div>
+{% if c %}
+<div class="card">
+  <div class="meta">{{ c.agency or '—' }} · {{ c.category or 'sem categoria' }} · {{ c.published_at }}{% if c.url %} · <a href="{{ c.url }}" target="_blank" rel="noopener">abrir no gov.br</a>{% endif %}</div>
+  <h2 style="border:0;font-variant:normal;font-size:22px;margin:8px 0">{{ c.title }}</h2>
+  <p style="max-height:16em;overflow:auto">{{ c.content[:1800] }}{% if c.content|length > 1800 %}…{% endif %}</p>
+  <p><strong>Rótulo do Cogfy:</strong> {{ cogfy }}</p>
+  <form method="post" action="/revisar/{{ c.id }}">
+    {% for s in skip %}<input type="hidden" name="pular" value="{{ s }}">{% endfor %}
+    <div class="row">
+      <button class="primary" name="acao" value="aceitar">Aceitar rótulo</button>
+      <button name="acao" value="pular" formnovalidate>Pular</button>
+      <button name="acao" value="descartar" formnovalidate>Descartar notícia</button>
+    </div>
+    <div class="row">
+      <label for="codigo" class="meta">Ou escolha outro tema:</label>
+      <input type="text" id="codigo" name="codigo" list="temas" placeholder="ex.: 05.02.01">
+      <datalist id="temas">{% for code, label in codes %}<option value="{{ code }} {{ label }}"></option>{% endfor %}</datalist>
+      <button name="acao" value="trocar">Trocar e salvar</button>
+    </div>
+  </form>
+</div>
+{% else %}
+<p>Não há mais rótulos provisórios {% if skip %}(você pulou {{ skip|length }}; <a href="/revisar">recomeçar</a>){% endif %}.</p>
+{% endif %}
+{% endblock %}

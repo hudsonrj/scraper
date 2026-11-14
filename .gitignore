@@ -6,3 +6,9 @@
 __pycache__
 analysis/*
 .DS_Store
+
+# newsloop
+harness/.cache/
+harness/runs/
+.venv/
+data/

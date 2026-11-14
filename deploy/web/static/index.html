@@ -1,0 +1,787 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>O Fim do Harness</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400;0,600;0,700;1,400;1,600&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: uma "página de artigo" em duas colunas, figuras animadas por rodada; tinta sobre papel. */
+:root{
+  --paper:#ffffff; --ink:#111111; --muted:#5d5d5a; --faint:#c4c4c0; --rule:#d9d9d5; --hl:#ececea; --chip:#f4f4f2;
+  --serif:"STIX Two Text","Times New Roman",Times,serif;
+  --sans:"IBM Plex Sans","Helvetica Neue",Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#141413; --ink:#ecebe6; --muted:#a3a29c; --faint:#55544f; --rule:#34332f; --hl:#25241f; --chip:#1d1c19; color-scheme:dark}}
+:root[data-theme="dark"]{--paper:#141413; --ink:#ecebe6; --muted:#a3a29c; --faint:#55544f; --rule:#34332f; --hl:#25241f; --chip:#1d1c19; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--serif);font-size:17px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 40px}
+.page{max-width:1120px;margin:0 auto}
+.running{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px;color:var(--muted);border-bottom:2px solid var(--ink);padding-bottom:8px}
+.running i{font-style:italic}
+.running .sc{font-variant:small-caps;letter-spacing:.06em;text-transform:lowercase}
+header.titleblock{text-align:center;padding:34px 0 14px}
+h1{font-size:clamp(34px,6.4vw,64px);line-height:1.05;margin:0;font-weight:700;text-wrap:balance;letter-spacing:-.01em}
+h1 .inv{background:var(--ink);color:var(--paper);padding:0 .14em;border-radius:4px;box-shadow:4px 4px 0 var(--faint);display:inline-block}
+.sub{font-style:italic;font-size:clamp(18px,2.4vw,24px);margin:10px 0 4px}
+.byline{color:var(--muted);font-size:16px}
+.abstract{max-width:960px;margin:22px auto 0;text-align:justify;hyphens:auto}
+.abstract mark{background:var(--hl);color:inherit;border-bottom:1.5px solid var(--ink);padding:0 2px}
+.index{font-style:italic;font-size:15px;margin-top:8px}
+hr.rule{border:0;border-top:1px solid var(--rule);margin:22px 0}
+
+figure{margin:0}
+figcaption{font-size:15px;line-height:1.45;margin-top:8px}
+figcaption b{font-weight:700}
+.sublabel{text-align:center;font-style:italic;font-size:15px;margin-top:4px}
+.fig1{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2.6fr);gap:0}
+.fig1 .a{border-right:1px dashed var(--faint);padding-right:14px}
+.fig1 .b{padding-left:14px;min-width:0}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.scroll svg{min-width:640px}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:var(--sans);fill:var(--ink)}
+svg .it{font-style:italic;fill:var(--muted)}
+svg .mono{font-family:var(--mono)}
+svg .box{fill:var(--paper);stroke:var(--ink);stroke-width:1.6}
+svg .shadow{fill:var(--ink)}
+svg .ln{stroke:var(--ink);stroke-width:1.6;fill:none}
+svg .dash{stroke:var(--faint);stroke-width:1.4;stroke-dasharray:4 4;fill:none}
+svg .faintln{stroke:var(--rule);stroke-width:1;fill:none}
+svg .arrowhead{fill:var(--ink)}
+svg .node .box,svg .node text{transition:fill .25s}
+svg .node.on .box{fill:var(--ink)}
+svg .node.on text{fill:var(--paper)}
+svg .chip rect{fill:var(--chip);stroke:var(--faint);stroke-width:1.2;transition:fill .2s}
+svg .chip text{fill:var(--muted);font-size:11px}
+svg .chip.show rect{stroke:var(--ink)}
+svg .chip.show text{fill:var(--ink)}
+svg .chip.win rect{fill:var(--ink);stroke:var(--ink)}
+svg .chip.win text{fill:var(--paper)}
+svg .bar{fill:var(--faint);transform-box:fill-box;transform-origin:50% 100%;transition:transform .45s ease,fill .25s}
+svg .bar.win{fill:var(--ink)}
+svg .ring{fill:none;stroke:var(--ink);stroke-width:2.4}
+svg .dot-k{fill:var(--ink)}
+svg .dot-r{fill:var(--faint)}
+svg .stepln{stroke:var(--ink);stroke-width:2.6;fill:none}
+svg .stepln-future{stroke:var(--faint);stroke-width:2;fill:none}
+svg .cursor{fill:none;stroke:var(--ink);stroke-width:2}
+svg .halo{fill:var(--hl)}
+svg .blk{fill:var(--chip);stroke:var(--faint);stroke-width:1.2}
+svg .blk.on{fill:var(--ink);stroke:var(--ink)}
+svg .inkfill{fill:var(--ink)}
+svg .paperfill{fill:var(--paper)}
+svg text.ontext{fill:var(--paper)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hand{transform-box:view-box;transform-origin:78px 268px;animation:spin 6s linear infinite}
+
+.live{font-family:var(--sans);font-size:13.5px;color:var(--muted);margin-top:6px;min-height:1.4em;text-align:center}
+.live b{color:var(--ink);font-weight:600}
+.controls{display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:8px;font-family:var(--sans);font-size:13px}
+button{font-family:var(--sans);font-size:13px;background:var(--paper);color:var(--ink);border:1.5px solid var(--ink);border-radius:4px;padding:6px 12px;cursor:pointer;box-shadow:2px 2px 0 var(--ink)}
+button:hover{background:var(--hl)}
+button:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--ink)}
+button.primary{background:var(--ink);color:var(--paper)}
+button.primary:hover{opacity:.9}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+input[type=range]{accent-color:var(--ink)}
+
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 52px;margin-top:10px}
+.col{min-width:0}
+h2{font-size:21px;font-weight:600;font-variant:small-caps;letter-spacing:.03em;margin:26px 0 8px;display:flex;align-items:center;gap:12px;text-wrap:balance}
+h2 .n{display:inline-grid;place-items:center;width:28px;height:28px;background:var(--ink);color:var(--paper);font-variant:normal;font-size:16px;font-weight:700;flex:none}
+p{margin:0 0 10px;text-align:justify;hyphens:auto}
+p.indent{text-indent:1.4em}
+.dropcap::first-letter{float:left;font-size:3.6em;line-height:.86;font-weight:700;background:var(--ink);color:var(--paper);padding:4px 6px 2px;margin:4px 8px 0 0}
+sup{font-size:.65em}
+
+.algo{border-top:2px solid var(--ink);border-bottom:2px solid var(--ink);margin:18px 0}
+.algo .hd{border-bottom:1px solid var(--ink);padding:6px 6px;font-size:16px}
+.algo ol{list-style:none;margin:0;padding:8px 0;font-family:var(--mono);font-size:13px;overflow-x:auto}
+.algo li{display:grid;grid-template-columns:28px 1fr;padding:2px 6px;white-space:pre;position:relative;transition:background .2s}
+.algo li .ln{color:var(--muted);text-align:right;padding-right:10px}
+.algo li.on{background:var(--hl)}
+.algo li.on::before{content:"";position:absolute;left:-2px;top:2px;bottom:2px;width:4px;background:var(--ink)}
+.algo b{font-weight:600}
+
+table.t{width:100%;border-collapse:collapse;font-size:15.5px;font-variant-numeric:tabular-nums}
+.tcap{text-align:center;font-variant:small-caps;letter-spacing:.06em;font-size:15px;margin:20px 0 8px;line-height:1.35}
+.tcap span{display:block;font-size:14px}
+table.t thead th{font-style:italic;font-weight:400;text-align:left;border-top:2px solid var(--ink);border-bottom:1px solid var(--ink);padding:6px 8px}
+table.t td{padding:6px 8px}
+table.t tbody tr:last-child td{border-bottom:2px solid var(--ink)}
+table.t td.k{font-style:italic;color:var(--muted)}
+table.t tr.hl td{background:var(--hl)}
+table.t tr.hl td:first-child{box-shadow:inset 4px 0 0 var(--ink)}
+
+.files{display:grid;grid-template-columns:90px minmax(0,1fr);gap:10px 12px;align-items:center;font-family:var(--sans);font-size:13px;margin-top:22px}
+.files .lbl{font-style:italic;color:var(--ink)}
+.filerow{display:flex;gap:6px;justify-content:space-between;overflow-x:auto;padding-bottom:2px}
+.file{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:38px;font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+.file svg{width:34px;height:42px}
+.file .pg{fill:var(--paper);stroke:var(--faint);stroke-width:1.4}
+.file .lns{stroke:var(--faint);stroke-width:1.2}
+.file .x{stroke:var(--faint);stroke-width:1.2;display:none}
+.file.old .x{display:inline}
+.file.cur .pg{fill:var(--ink);stroke:var(--ink)}
+.file.cur .lns{stroke:var(--paper)}
+.file.fut .pg{stroke:var(--ink)}
+.file.fut .lns{stroke:var(--ink)}
+.file.cur span{color:var(--ink);font-weight:600}
+.scoringbar{border:1.5px solid var(--ink);box-shadow:4px 4px 0 var(--ink);border-radius:4px;padding:8px 12px;display:flex;align-items:center;gap:10px;background:var(--chip)}
+.grades{font-size:12.5px;color:var(--muted);text-align:center;font-style:italic}
+
+.takeaway{border:2px solid var(--ink);box-shadow:6px 6px 0 var(--ink);padding:16px 20px;margin:26px 0 10px;border-radius:3px}
+.takeaway .k{font-variant:small-caps;letter-spacing:.08em;font-size:15px}
+.takeaway .q{font-style:italic;font-weight:700;font-size:clamp(22px,3vw,30px);line-height:1.2}
+
+.footnotes{border-top:1px solid var(--ink);width:45%;min-width:220px;margin-top:26px;padding-top:6px;font-size:13.5px}
+.footnotes ol{margin:0;padding-left:18px}
+footer{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;border-top:1px solid var(--rule);margin-top:26px;padding-top:10px;font-size:13px;color:var(--muted);font-style:italic}
+
+/* Laboratório */
+.lab{border-top:2px solid var(--ink);margin-top:30px;padding-top:4px}
+.lab-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:24px;margin-top:10px}
+.lab label{display:block;font-family:var(--sans);font-size:13px;font-weight:600;margin:0 0 4px}
+.lab .hint{font-family:var(--sans);font-size:12.5px;color:var(--muted);margin:0 0 6px;text-align:left}
+textarea{width:100%;font-family:var(--mono);font-size:12.5px;line-height:1.5;background:var(--chip);color:var(--ink);border:1.5px solid var(--ink);border-radius:4px;padding:10px;resize:vertical}
+#exam{min-height:330px}
+#h0{min-height:110px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px;font-family:var(--sans);font-size:13px}
+.checks{list-style:none;padding:0;margin:8px 0 0;font-family:var(--sans);font-size:13px;display:grid;gap:4px}
+.checks li{display:grid;grid-template-columns:22px 1fr;align-items:start}
+.pill{display:inline-block;font-family:var(--sans);font-size:11.5px;font-weight:600;border:1.4px solid var(--ink);border-radius:999px;padding:0 7px;line-height:18px;text-align:center}
+.pill.ok{background:var(--ink);color:var(--paper)}
+.pill.warn{border-style:dashed}
+.stat{display:flex;gap:18px;flex-wrap:wrap;font-family:var(--sans);margin:10px 0}
+.stat div{display:flex;flex-direction:column}
+.stat .v{font-family:var(--serif);font-size:30px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.stat .l{font-size:12px;color:var(--muted)}
+pre.hfile{font-family:var(--mono);font-size:12.5px;background:var(--ink);color:var(--paper);border-radius:4px;padding:12px;margin:0;overflow-x:auto;box-shadow:4px 4px 0 var(--faint);white-space:pre}
+pre.hfile .add{font-weight:600}
+pre.hfile .del{text-decoration:line-through;opacity:.6}
+.logwrap{overflow-x:auto;margin-top:12px}
+table.log{font-family:var(--sans);font-size:12.5px}
+table.log td,table.log th{padding:4px 6px;white-space:nowrap}
+table.log td.e{font-family:var(--mono)}
+.err{font-family:var(--sans);font-size:13px;border:1.5px dashed var(--ink);padding:8px 10px;margin-top:8px}
+
+@media (max-width:860px){
+  .fig1{grid-template-columns:minmax(0,1fr)}
+  .fig1 .a{border-right:0;border-bottom:1px dashed var(--faint);padding:0 0 12px;max-width:420px;margin:0 auto;width:100%}
+  .fig1 .b{padding:12px 0 0}
+  .cols,.lab-grid{grid-template-columns:minmax(0,1fr)}
+  body{font-size:16.5px}
+}
+@media (prefers-reduced-motion:reduce){
+  .hand{animation:none}
+  svg .bar,svg .node .box,svg .node text,.algo li{transition:none}
+}
+.topnav{font-family:var(--sans);font-size:13px;text-align:right;margin-bottom:8px}.topnav a{color:var(--ink)}
+</style>
+</head>
+<body>
+
+
+<div class="page">
+<nav class="topnav"><a href="/painel">Painel do loop real</a> · <a href="/revisar">Revisar a prova</a></nav>
+  <div class="running">
+    <span><i>Notas de leitura</i> · <i>O Fim da Engenharia de Harness (2026)</i></span>
+    <span class="sc">Engenharia de Harness · Engenharia de Loop</span>
+  </div>
+
+  <header class="titleblock">
+    <h1>O Fim da Engenharia de <span class="inv">Harness</span></h1>
+    <div class="sub">o loop escreve o harness, o humano escreve a prova</div>
+    <div class="byline">Notas de leitura sobre um artigo de 2026 de uma equipe de pesquisadores chineses, com um laboratório que roda o loop</div>
+  </header>
+
+  <p class="abstract"><b><i>Resumo.</i></b> Harness é o programa escrito ao redor de um modelo: ferramentas, instruções, fluxos e lógica de execução. Escrevê-lo à mão sempre foi a habilidade central de quem constrói agentes. O artigo argumenta que isso está acabando. Um harness escrito à mão é um palpite sobre uma tarefa, feito numa tarde; depois de publicado, ele roda por meses sem que ninguém leia ou dê nota. No loop que o artigo descreve, o harness é um arquivo que se avalia: um modelo pequeno de 4B lê o que falhou e propõe 8 edições, <mark>e só sobrevive a edição que tira a maior nota em perguntas held-out.</mark> Isso se repete a cada rodada. O modelo grande fica congelado; só o arquivo ao redor dele muda. O trabalho humano encolhe para um único artefato, o conjunto de avaliação, então frameworks viram descartáveis e a prova vira o trabalho.</p>
+  <p class="abstract index"><b>Termos-chave:</b> engenharia de harness, harness auto-aprimorável, avaliação held-out, modelo congelado, modelo editor pequeno, engenharia de loop</p>
+
+  <hr class="rule">
+
+  <!-- FIGURA 1 -->
+  <figure>
+    <div class="fig1">
+      <div class="a">
+        <svg viewBox="0 0 360 360" role="img" aria-label="Harness escrito à mão: uma pessoa escreve um arquivo, o modelo congelado roda por meses e ninguém dá nota.">
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="arrowhead"/></marker>
+          </defs>
+          <!-- pessoa -->
+          <circle cx="34" cy="62" r="11" class="box"/>
+          <path d="M14,96 q20,-26 40,0" class="ln"/>
+          <text x="34" y="118" text-anchor="middle" font-size="13">pessoa</text>
+          <text x="34" y="134" text-anchor="middle" font-size="12" class="it">uma tarde</text>
+          <line x1="62" y1="76" x2="92" y2="76" class="ln" marker-end="url(#ah)"/>
+          <!-- arquivo -->
+          <path d="M100,46 h32 l12,12 v44 h-44 z" class="box"/>
+          <g class="faintln"><line x1="108" y1="68" x2="136" y2="68"/><line x1="108" y1="76" x2="136" y2="76"/><line x1="108" y1="84" x2="136" y2="84"/><line x1="108" y1="92" x2="130" y2="92"/></g>
+          <text x="122" y="120" text-anchor="middle" font-size="12" class="mono">harness v0</text>
+          <text x="122" y="135" text-anchor="middle" font-size="12" class="it">um palpite</text>
+          <line x1="150" y1="76" x2="178" y2="76" class="ln" marker-end="url(#ah)"/>
+          <!-- modelo -->
+          <rect x="190" y="50" width="164" height="56" rx="4" class="shadow" transform="translate(4,4)"/>
+          <rect x="190" y="50" width="164" height="56" rx="4" class="box"/>
+          <text x="212" y="76" font-size="14" font-weight="600">✳ modelo grande</text>
+          <text x="212" y="94" font-size="12" class="it">congelado, nunca muda</text>
+          <line x1="272" y1="112" x2="272" y2="216" class="ln" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+          <!-- saídas -->
+          <path d="M256,226 h24 l10,10 v34 h-34 z" class="box" transform="translate(8,-6)"/>
+          <path d="M256,226 h24 l10,10 v34 h-34 z" class="box"/>
+          <text x="272" y="300" text-anchor="middle" font-size="13">saídas</text>
+          <text x="272" y="316" text-anchor="middle" font-size="12" class="it">por meses</text>
+          <!-- relógio -->
+          <circle cx="160" cy="250" r="22" class="box"/>
+          <line x1="160" y1="250" x2="160" y2="234" class="ln" style="transform-box:view-box;transform-origin:160px 250px;animation:spin 6s linear infinite"/>
+          <text x="160" y="300" text-anchor="middle" font-size="13">roda por meses</text>
+          <text x="160" y="316" text-anchor="middle" font-size="12" class="it">ninguém lê</text>
+          <line x1="186" y1="250" x2="248" y2="250" class="dash"/>
+          <!-- sem nota -->
+          <rect x="14" y="230" width="64" height="40" rx="3" class="box" stroke-dasharray="4 3"/>
+          <text x="46" y="255" text-anchor="middle" font-size="12" class="it">nota</text>
+          <line x1="18" y1="234" x2="74" y2="266" class="ln"/><line x1="74" y1="234" x2="18" y2="266" class="ln"/>
+          <line x1="82" y1="250" x2="134" y2="250" class="dash"/>
+          <text x="46" y="300" text-anchor="middle" font-size="13">sem nota</text>
+          <text x="46" y="316" text-anchor="middle" font-size="12" class="it">nunca avaliado</text>
+        </svg>
+        <div class="sublabel">(a) harness escrito à mão</div>
+      </div>
+
+      <div class="b">
+        <div class="scroll">
+        <svg id="fig1b" viewBox="0 0 1000 360" role="img" aria-label="Harness escrito pelo loop: falhas, editor de 4B, 8 edições candidatas, perguntas held-out, melhor edição mantida, novo arquivo de harness, modelo congelado roda a tarefa, e o ciclo recomeça.">
+          <defs>
+            <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="arrowhead"/></marker>
+          </defs>
+          <!-- linhas -->
+          <line x1="134" y1="70" x2="160" y2="70" class="ln" marker-end="url(#ah2)"/>
+          <line x1="300" y1="70" x2="326" y2="70" class="ln" marker-end="url(#ah2)"/>
+          <line x1="528" y1="70" x2="554" y2="70" class="ln" marker-end="url(#ah2)"/>
+          <line x1="734" y1="70" x2="762" y2="70" class="ln" marker-end="url(#ah2)"/>
+          <line x1="868" y1="102" x2="868" y2="262" class="ln" marker-end="url(#ah2)"/>
+          <text x="858" y="176" text-anchor="end" font-size="12" class="it">vira a próxima</text>
+          <text x="858" y="191" text-anchor="end" font-size="12" class="it">versão</text>
+          <line x1="766" y1="298" x2="722" y2="298" class="ln" marker-end="url(#ah2)"/>
+          <line x1="466" y1="298" x2="430" y2="298" class="ln" marker-end="url(#ah2)"/>
+          <polyline points="248,298 72,298 72,108" class="ln" marker-end="url(#ah2)"/>
+          <text x="84" y="190" font-size="12" class="it">próxima</text>
+          <text x="84" y="205" font-size="12" class="it">rodada</text>
+          <line x1="644" y1="100" x2="644" y2="200" class="dash"/><line x1="644" y1="200" x2="572" y2="200" class="dash"/>
+
+          <!-- nós -->
+          <g class="node" id="n-fail"><rect x="14" y="44" width="120" height="56" rx="4" class="shadow" transform="translate(4,4)"/><rect x="14" y="44" width="120" height="56" rx="4" class="box"/>
+            <text x="74" y="68" text-anchor="middle" font-size="14" font-weight="600">falhas</text><text x="74" y="87" text-anchor="middle" font-size="11.5" class="it" id="t-fail">o que deu errado</text></g>
+          <g class="node" id="n-edit"><rect x="164" y="44" width="136" height="56" rx="4" class="shadow" transform="translate(4,4)"/><rect x="164" y="44" width="136" height="56" rx="4" class="box"/>
+            <text x="232" y="68" text-anchor="middle" font-size="14" font-weight="600">editor 4B</text><text x="232" y="87" text-anchor="middle" font-size="11.5" class="it">lê as falhas</text></g>
+          <text x="428" y="30" text-anchor="middle" font-size="12" class="it">8 edições candidatas</text>
+          <g id="chips"></g>
+          <g class="node" id="n-held"><rect x="558" y="44" width="176" height="56" rx="4" class="shadow" transform="translate(4,4)"/><rect x="558" y="44" width="176" height="56" rx="4" class="box"/>
+            <g transform="translate(572,56)"><rect width="22" height="30" rx="2" class="box"/><line x1="5" y1="9" x2="17" y2="9" class="ln" stroke-width="1.4"/><line x1="5" y1="15" x2="17" y2="15" class="ln" stroke-width="1.4"/><line x1="5" y1="21" x2="17" y2="21" class="ln" stroke-width="1.4"/></g>
+            <text x="604" y="68" font-size="14" font-weight="600">perguntas</text><text x="604" y="86" font-size="14" font-weight="600">held-out</text></g>
+          <g class="node" id="n-best"><rect x="766" y="44" width="210" height="56" rx="4" class="shadow" transform="translate(4,4)"/><rect x="766" y="44" width="210" height="56" rx="4" class="box"/>
+            <text x="871" y="68" text-anchor="middle" font-size="14" font-weight="600">melhor edição mantida</text><text x="871" y="87" text-anchor="middle" font-size="11.5" class="it" id="t-best">1 de 8 sobrevive</text></g>
+
+          <!-- contador de rodada -->
+          <circle cx="260" cy="196" r="30" class="box"/>
+          <path d="M236,178 a30,30 0 1 1 -2,30" class="ln" stroke-width="2.2" marker-end="url(#ah2)"/>
+          <text x="260" y="204" text-anchor="middle" font-size="24" font-weight="600" id="roundNum" style="font-family:var(--serif)">1</text>
+          <text x="260" y="246" text-anchor="middle" font-size="12" class="it">rodada</text>
+
+          <!-- barras -->
+          <g id="bars"></g>
+          <line x1="370" y1="232" x2="570" y2="232" class="ln" stroke-width="1.2"/>
+          <text x="470" y="250" text-anchor="middle" font-size="12" class="it">nota held-out de cada edição</text>
+
+          <g class="node" id="n-task"><rect x="252" y="270" width="178" height="56" rx="4" class="shadow" transform="translate(4,4)"/><rect x="252" y="270" width="178" height="56" rx="4" class="box"/>
+            <text x="341" y="294" text-anchor="middle" font-size="14" font-weight="600">roda a tarefa</text><text x="341" y="313" text-anchor="middle" font-size="11.5" class="it">saídas</text></g>
+          <g class="node" id="n-big"><rect x="470" y="270" width="250" height="56" rx="4" class="shadow" transform="translate(4,4)"/><rect x="470" y="270" width="250" height="56" rx="4" class="box"/>
+            <text x="494" y="294" font-size="14" font-weight="600">✳ modelo grande congelado</text><text x="494" y="313" font-size="11.5" class="it">ex.: Claude, nunca retreinado</text></g>
+          <g class="node" id="n-hfile"><rect x="770" y="266" width="206" height="62" rx="4" class="shadow" transform="translate(4,4)"/><rect x="770" y="266" width="206" height="62" rx="4" class="box"/>
+            <g transform="translate(786,278)"><path d="M0,0 h18 l8,8 v30 h-26 z" class="box"/></g>
+            <text x="824" y="292" font-size="14" font-weight="600">arquivo de harness</text><text x="824" y="312" font-size="12" class="mono" id="t-ver">agora v0</text></g>
+        </svg>
+        </div>
+        <div class="sublabel">(b) harness escrito pelo loop</div>
+      </div>
+    </div>
+    <div class="live" id="live">&nbsp;</div>
+    <div class="controls">
+      <button type="button" id="play" aria-pressed="true">Pausar</button>
+      <label for="scrub">rodada</label>
+      <input type="range" id="scrub" min="1" max="8" value="1">
+      <span id="scrubv" style="font-variant-numeric:tabular-nums">1/8</span>
+    </div>
+    <figcaption><b>Fig. 1.</b> Duas formas de escrever um harness. (a) Uma pessoa escreve um arquivo para uma tarefa e publica; o modelo congelado roda por meses e nada nunca recebe nota. (b) A cada rodada um editor de 4B lê as falhas e propõe 8 edições; cada edição é avaliada em perguntas held-out e só a melhor vira o próximo arquivo de harness. O modelo grande é o mesmo modelo congelado nos dois casos. A animação mostra a execução real do laboratório (§5).</figcaption>
+  </figure>
+
+  <hr class="rule">
+
+  <div class="cols">
+    <div class="col">
+      <h2><span class="n">1</span>Introdução</h2>
+      <p class="dropcap">Engenharia de harness significou, até hoje, escrever à mão o programa ao redor do modelo. Uma pessoa estuda uma tarefa, escreve um arquivo e publica.<sup>1</sup> Depois disso ninguém lê o arquivo e ninguém dá nota a ele, então um palpite errado continua rodando por meses. A resposta do artigo é parar de escrever esse arquivo à mão e deixar um loop escrevê-lo, sem tocar no modelo.</p>
+
+      <h2><span class="n">2</span>O Loop</h2>
+      <p class="indent">Cada rodada começa pelo que falhou. Um modelo pequeno de 4B<sup>2</sup> lê as falhas e propõe 8 edições ao arquivo de harness. Cada edição é avaliada em perguntas held-out;<sup>3</sup> a melhor é mantida como próxima versão e as outras sete são descartadas (Algoritmo 1). O modelo grande nunca é retreinado: fica congelado enquanto o arquivo ao redor dele muda.</p>
+
+      <div class="algo">
+        <div class="hd"><b>Algoritmo 1</b>&nbsp; Uma rodada do loop</div>
+        <ol id="algo">
+          <li data-l="0"><span class="ln"></span><span><b>Entrada:</b> harness h_n, modelo congelado M, conjunto de avaliação Q</span></li>
+          <li data-l="1"><span class="ln">1</span><span>F := falhas de M rodando h_n</span></li>
+          <li data-l="2"><span class="ln">2</span><span>E := 8 edições propostas pelo editor 4B a partir de F</span></li>
+          <li data-l="3"><span class="ln">3</span><span><b>para cada</b> e em E: s(e) := nota de M em Q com h_n + e</span></li>
+          <li data-l="4"><span class="ln">4</span><span>h_n+1 := h_n + o e com o maior s(e)</span></li>
+          <li data-l="5"><span class="ln">5</span><span>n := n + 1, <b>repita</b></span></li>
+        </ol>
+      </div>
+
+      <figure>
+        <svg id="fig2" viewBox="0 0 560 300" role="img" aria-label="Nota held-out por rodada: a linha do harness sobe em degraus a partir da linha de base escrita à mão."></svg>
+        <figcaption><b>Fig. 2.</b> Nota held-out por rodada. A cada rodada o editor propõe 8 edições: as 7 rejeitadas ficam em cinza, a mantida em preto. O harness só muda quando uma edição vence, então a linha sobe a partir da base escrita à mão, uma edição por vez.</figcaption>
+      </figure>
+
+      <figure style="margin-top:22px">
+        <svg id="fig4" viewBox="0 0 560 190" role="img" aria-label="Quem trabalha em cada rodada: o humano só antes do loop; editor e modelo grande em toda rodada."></svg>
+        <figcaption><b>Fig. 4.</b> Quem trabalha em cada rodada. O humano escreve o conjunto de avaliação uma vez, antes do loop começar; em toda rodada o editor 4B propõe edições e o modelo congelado roda para avaliá-las e para fazer a tarefa.</figcaption>
+      </figure>
+    </div>
+
+    <div class="col">
+      <div class="tcap">Tabela 1<span>Quem escreve o quê no loop</span></div>
+      <table class="t" id="t1">
+        <thead><tr><th>Parte</th><th>Escreve</th><th>Com que frequência</th></tr></thead>
+        <tbody>
+          <tr data-who="human"><td>Humano</td><td>o conjunto de avaliação</td><td>uma vez, antes do loop</td></tr>
+          <tr data-who="editor"><td>Loop: modelo 4B</td><td>edições do harness</td><td>8 por rodada</td></tr>
+          <tr data-who="big"><td>✳ Modelo grande</td><td>nada, congelado</td><td>roda em toda rodada</td></tr>
+        </tbody>
+      </table>
+
+      <h2><span class="n">3</span>O que muda</h2>
+      <p class="indent">Três partes tocam o sistema e só uma delas é uma pessoa (Tabela 1). O humano escreve o conjunto de avaliação: as perguntas em que o harness recebe nota. O modelo 4B escreve toda edição do arquivo de harness. O modelo grande não escreve nada; é o mesmo modelo congelado em toda rodada, e só o arquivo ao redor dele muda (Tabela 2).</p>
+
+      <div class="tcap">Tabela 2<span>Harness escrito à mão vs. escrito pelo loop</span></div>
+      <table class="t">
+        <thead><tr><th></th><th>à mão</th><th>pelo loop</th></tr></thead>
+        <tbody>
+          <tr><td class="k">escrito por</td><td>uma pessoa</td><td>um modelo de 4B</td></tr>
+          <tr><td class="k">frequência</td><td>uma vez, numa tarde</td><td>toda rodada</td></tr>
+          <tr><td class="k">candidatos</td><td>um palpite</td><td>8 edições por rodada</td></tr>
+          <tr class="hl"><td class="k">avaliado em</td><td>nada</td><td>perguntas held-out</td></tr>
+          <tr><td class="k">após publicar</td><td>roda por meses, sem leitura</td><td>falhas lidas a cada rodada</td></tr>
+          <tr><td class="k">modelo grande</td><td>congelado</td><td>congelado</td></tr>
+        </tbody>
+      </table>
+
+      <figure>
+        <div class="files">
+          <div class="lbl">arquivo de harness</div>
+          <div class="filerow" id="files"></div>
+          <div></div>
+          <div class="grades">↑ dá nota</div>
+          <div class="lbl">conjunto de avaliação</div>
+          <div class="scoringbar"><svg viewBox="0 0 22 28" style="width:18px;height:24px;flex:none"><rect x="1" y="1" width="20" height="26" rx="2" class="box"/><line x1="5" y1="9" x2="17" y2="9" class="ln" stroke-width="1.4"/><line x1="5" y1="15" x2="17" y2="15" class="ln" stroke-width="1.4"/><line x1="5" y1="21" x2="17" y2="21" class="ln" stroke-width="1.4"/></svg><span style="font-family:var(--sans);font-size:13.5px">escrito uma vez, por um humano, mantido em toda rodada</span></div>
+        </div>
+        <figcaption style="margin-top:14px"><b>Fig. 3.</b> O arquivo de harness é reescrito a cada rodada e o antigo vai fora; o conjunto de avaliação é o único artefato que fica.</figcaption>
+      </figure>
+
+      <h2><span class="n">4</span>Conclusão</h2>
+      <p class="indent">Quando um loop escreve o harness, frameworks viram descartáveis e a prova vira o trabalho. A ordem do trabalho se inverte: primeiro as perguntas em que o harness vai receber nota, depois o código. A vantagem competitiva deixa de ser quão bem escrevemos código para agentes e passa a ser quão bem medimos se eles realmente melhoraram.</p>
+
+      <div class="takeaway">
+        <div class="k">Lição</div>
+        <div class="q">escreva a prova antes do código</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LABORATÓRIO -->
+  <section class="lab" aria-labelledby="labh">
+    <h2 id="labh"><span class="n">5</span>Laboratório: escreva a prova</h2>
+    <p>Aqui o loop roda de verdade, no seu navegador. A tarefa: classificar manchetes de notícias do gov.br em quatro temas. O <b>modelo grande congelado</b> é um classificador fixo que nunca muda: ele conta quantas palavras de cada tema do harness aparecem na manchete e escolhe o tema com mais acertos (empate ou zero conta como erro). O <b>arquivo de harness</b> é a lista de palavras por tema. O <b>editor</b> lê as manchetes que falharam e propõe 8 edições (incluir ou remover uma palavra); cada edição é avaliada nas perguntas held-out e só a melhor fica.<sup>4</sup></p>
+    <p>Seu trabalho é só a prova. Edite as manchetes rotuladas abaixo e rode o loop: metade vira o conjunto de onde saem as falhas, a outra metade é held-out e serve só para dar nota. Uma prova fraca produz um harness fraco, e o loop não tem como perceber.</p>
+
+    <div class="lab-grid">
+      <div>
+        <label for="exam">Conjunto de avaliação (uma pergunta por linha: <code>tema | manchete</code>)</label>
+        <p class="hint">Temas válidos são as chaves do harness v0 ao lado. Linhas em branco e iniciadas por # são ignoradas.</p>
+        <textarea id="exam" spellcheck="false"></textarea>
+        <div class="row">
+          <button type="button" class="primary" id="run">Rodar o loop</button>
+          <label for="rounds" style="margin:0;font-weight:400">rodadas</label>
+          <input type="number" id="rounds" min="1" max="12" value="8" style="width:56px;font-family:var(--sans);font-size:13px;padding:4px;background:var(--chip);color:var(--ink);border:1.5px solid var(--ink);border-radius:4px">
+          <button type="button" id="reset">Restaurar exemplo</button>
+        </div>
+        <div id="errs"></div>
+        <label style="margin-top:16px">Qualidade da prova</label>
+        <ul class="checks" id="checks"></ul>
+      </div>
+      <div>
+        <label for="h0">Harness v0, escrito à mão (<code>tema: palavra, palavra</code>)</label>
+        <p class="hint">As palavras são comparadas pelos 6 primeiros caracteres, sem acento: "vacina" cobre "vacinação" e "vacinas".</p>
+        <textarea id="h0" spellcheck="false"></textarea>
+        <div class="stat" id="stats"></div>
+        <label>Arquivo de harness final</label>
+        <pre class="hfile" id="hfile"></pre>
+        <div class="logwrap">
+          <table class="t log" id="log"></table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="footnotes">
+    <ol>
+      <li>Um palpite sobre uma tarefa, feito numa tarde.</li>
+      <li>4B: um modelo com cerca de quatro bilhões de parâmetros, pequeno perto do modelo congelado que ele edita.</li>
+      <li>Perguntas held-out ficam fora da etapa de edição e são usadas só para dar nota.</li>
+      <li>No laboratório o editor é uma heurística determinística que imita o papel do modelo de 4B: as 5 edições que mais explicam as falhas e mais 3 ao acaso. Empates na nota held-out são decididos pela nota no conjunto de tarefas, e uma edição só entra se melhorar uma das duas.</li>
+    </ol>
+  </div>
+
+  <footer>
+    <span>O Fim da Engenharia de Harness · notas de leitura</span>
+    <span>1</span>
+    <span><a href="/painel" style="color:inherit">ver o loop rodando no classificador real</a></span>
+  </footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+var THEMES_LABEL={saude:"Saúde",economia:"Economia",educacao:"Educação",ambiente:"Meio Ambiente"};
+var SAMPLE_H0="saude: saude, hospital\neconomia: economia, inflacao\neducacao: escola, educacao\nambiente: ambiental, floresta";
+var SAMPLE_EXAM=[
+"# Saúde (linhas ímpares de cada tema vão para a tarefa; pares, para o held-out)",
+"saude | Ministério da Saúde amplia campanha de vacinação contra a gripe",
+"saude | Governo distribui vacinas contra dengue para municípios",
+"saude | SUS inaugura policlínica com atendimento especializado",
+"saude | Unidades do SUS ampliam horário de atendimento",
+"saude | Hospital federal recebe equipamentos para tratamento de câncer",
+"saude | Novo medicamento contra câncer é aprovado pela Anvisa",
+"saude | Mais Médicos abre vagas para profissionais de saúde",
+"saude | Mais Médicos leva profissionais ao interior do país",
+"saude | Farmácia Popular oferece medicamentos gratuitos para diabetes",
+"saude | Farmácia Popular amplia lista de remédios gratuitos",
+"saude | Campanha incentiva doação de sangue nos hemocentros",
+"saude | Hemocentros convocam doadores de sangue antes do feriado",
+"# Economia",
+"economia | Inflação recua pelo terceiro mês consecutivo",
+"economia | IBGE: inflação de alimentos desacelera em outubro",
+"economia | Tesouro Direto lança títulos indexados aos preços",
+"economia | Tesouro Nacional capta recursos com emissão de títulos",
+"economia | Receita Federal libera lote de restituição do imposto de renda",
+"economia | Imposto de renda: prazo de entrega termina na sexta",
+"economia | Banco Central mantém taxa básica de juros",
+"economia | Juros do crédito rural caem para pequenos produtores",
+"economia | Economia cresce acima das expectativas no trimestre",
+"economia | Exportações batem recorde no terceiro trimestre",
+"economia | Desemprego atinge menor nível da série histórica",
+"economia | Taxa de desemprego cai pelo quarto trimestre seguido",
+"# Educação",
+"educacao | Inscrições para o Enem começam na próxima segunda",
+"educacao | Enem: estudantes já podem consultar o local de prova",
+"educacao | MEC divulga resultado do Sisu com vagas em universidades federais",
+"educacao | Universidades federais recebem reforço no orçamento",
+"educacao | Pé-de-Meia paga nova parcela a estudantes do ensino médio",
+"educacao | Ensino médio em tempo integral recebe novos recursos",
+"educacao | Prouni oferece bolsas em faculdades privadas",
+"educacao | Bolsas do Prouni: resultado da segunda chamada sai hoje",
+"educacao | Professores da rede pública recebem formação em alfabetização",
+"educacao | Programa de alfabetização chega a mais municípios",
+"educacao | Livros didáticos chegam às escolas antes das aulas",
+"educacao | Escolas indígenas recebem material didático bilíngue",
+"# Meio Ambiente",
+"ambiente | Desmatamento na Amazônia cai pelo segundo ano seguido",
+"ambiente | Alertas de desmatamento no Cerrado recuam",
+"ambiente | Ibama intensifica fiscalização contra queimadas",
+"ambiente | Satélites detectam focos de queimadas no Pantanal",
+"ambiente | Governo cria unidade de conservação na Mata Atlântica",
+"ambiente | Nova área de conservação protege nascentes no Cerrado",
+"ambiente | Brasil amplia geração de energia solar e eólica",
+"ambiente | Leilão de energia renovável atrai investimentos recordes",
+"ambiente | Fundo Amazônia aprova projetos de bioeconomia",
+"ambiente | Fundo Amazônia apoia brigadas contra incêndios",
+"ambiente | ICMBio reforça proteção de espécies ameaçadas",
+"ambiente | Plano protege espécies ameaçadas de extinção"
+].join("\n");
+
+var STOP=new Set("para pela pelo pelos pelas com contra como mais sobre entre apos antes esta este essa esse novo nova novos novas pela pelas seus suas aponta passa".split(" "));
+function norm(s){return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");}
+function stems(s){var out=[],seen={};norm(s).split(/[^a-z]+/).forEach(function(w){if(w.length<4||STOP.has(w))return;var k=w.slice(0,6);if(!seen[k]){seen[k]=1;out.push(k);}});return out;}
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+
+function parseHarness(txt){
+  var h={},order=[],errs=[];
+  txt.split("\n").forEach(function(line,i){
+    line=line.trim(); if(!line||line[0]==="#")return;
+    var m=line.match(/^([^:]+):(.*)$/);
+    if(!m){errs.push("Harness, linha "+(i+1)+": use o formato tema: palavra, palavra");return;}
+    var k=norm(m[1].trim()).replace(/\s+/g,"");
+    if(!h[k]){h[k]=new Set();order.push(k);}
+    m[2].split(",").forEach(function(w){stems(w).forEach(function(s){h[k].add(s);});});
+  });
+  return {h:h,order:order,errs:errs};
+}
+function parseExam(txt,themes){
+  var items=[],errs=[];
+  txt.split("\n").forEach(function(line,i){
+    line=line.trim(); if(!line||line[0]==="#")return;
+    var p=line.indexOf("|");
+    if(p<0){errs.push("Prova, linha "+(i+1)+": falta o separador | entre tema e manchete");return;}
+    var t=norm(line.slice(0,p).trim()).replace(/\s+/g,""), title=line.slice(p+1).trim();
+    if(themes.indexOf(t)<0){errs.push("Prova, linha "+(i+1)+": o tema \""+t+"\" não existe no harness v0");return;}
+    if(!title){errs.push("Prova, linha "+(i+1)+": manchete vazia");return;}
+    items.push({theme:t,title:title,st:stems(title)});
+  });
+  return {items:items,errs:errs};
+}
+function cloneH(h){var o={};for(var k in h)o[k]=new Set(h[k]);return o;}
+function predict(h,st){var best=null,bc=0,tie=false;for(var k in h){var c=0;for(var i=0;i<st.length;i++)if(h[k].has(st[i]))c++;if(c>bc){bc=c;best=k;tie=false;}else if(c===bc&&c>0)tie=true;}return(bc===0||tie)?null:best;}
+function acc(h,items){if(!items.length)return 0;var c=0;items.forEach(function(it){if(predict(h,it.st)===it.theme)c++;});return c/items.length;}
+function applyEdit(h,e){var n=cloneH(h);if(e.op==="+")n[e.theme].add(e.stem);else n[e.theme].delete(e.stem);return n;}
+function editLabel(e){return e.op+" "+e.theme+": "+e.stem;}
+
+function editor(h,failures,rng){
+  var m={};
+  failures.forEach(function(f){
+    var p=predict(h,f.st);
+    f.st.forEach(function(s){
+      if(!h[f.theme].has(s)){var k="+|"+f.theme+"|"+s;m[k]=(m[k]||0)+1;}
+      if(p&&p!==f.theme&&h[p].has(s)){var k2="-|"+p+"|"+s;m[k2]=(m[k2]||0)+1.5;}
+    });
+  });
+  var arr=Object.keys(m).map(function(k){var a=k.split("|");return{op:a[0],theme:a[1],stem:a[2],w:m[k]+rng()*0.9};});
+  arr.sort(function(a,b){return b.w-a.w;});
+  var top=arr.slice(0,5),rest=arr.slice(5);
+  while(top.length<8&&rest.length){top.push(rest.splice(Math.floor(rng()*rest.length),1)[0]);}
+  return top;
+}
+
+function simulate(items,h0,maxR){
+  var task=[],held=[],byT={};
+  items.forEach(function(it){byT[it.theme]=(byT[it.theme]||0)+1;(byT[it.theme]%2===1?task:held).push(it);});
+  var rng=mulberry(20261114),h=cloneH(h0),cur=acc(h,held),curT=acc(h,task);
+  var hist={v0:cur,v0t:curT,rounds:[],task:task,held:held,versions:[cloneH(h)]};
+  for(var r=1;r<=maxR;r++){
+    var failures=task.filter(function(it){return predict(h,it.st)!==it.theme;});
+    if(!failures.length){break;}
+    var cands=editor(h,failures,rng).map(function(e){var nh=applyEdit(h,e);return{e:e,s:acc(nh,held),t:acc(nh,task),h:nh};});
+    if(!cands.length)break;
+    var bi=0;cands.forEach(function(c,i){var b=cands[bi];if(c.s>b.s||(c.s===b.s&&c.t>b.t))bi=i;});
+    var b=cands[bi],kept=(b.s>cur)||(b.s===cur&&b.t>curT);
+    if(kept){h=b.h;cur=b.s;curT=b.t;}
+    hist.versions.push(cloneH(h));
+    hist.rounds.push({n:r,failures:failures.length,cands:cands,best:bi,kept:kept,score:cur,taskScore:curT});
+  }
+  hist.final=h;
+  return hist;
+}
+
+/* ---------- render ---------- */
+var NS="http://www.w3.org/2000/svg";
+function el(tag,attrs,parent,text){var e=document.createElementNS(NS,tag);for(var k in attrs)e.setAttribute(k,attrs[k]);if(text!=null)e.textContent=text;if(parent)parent.appendChild(e);return e;}
+var $=function(id){return document.getElementById(id);};
+var pct=function(x){return Math.round(x*100)+"%";};
+
+var H=null, R=1, PH=0, timer=null, playing=true;
+var reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function buildChips(){
+  var g=$("chips");g.innerHTML="";
+  for(var i=0;i<8;i++){var x=332+(i%4)*49,y=i<4?46:74;var c=el("g",{"class":"chip",id:"chip"+i},g);el("rect",{x:x,y:y,width:44,height:22,rx:3},c);el("text",{x:x+22,y:y+15,"text-anchor":"middle"},c,"e"+(i+1));el("title",{},c,"");}
+  var b=$("bars");b.innerHTML="";
+  for(var j=0;j<8;j++){el("rect",{"class":"bar",id:"bar"+j,x:376+j*24,y:162,width:16,height:70},b);}
+}
+
+function renderFig1(){
+  if(!H||!H.rounds.length)return;
+  var rd=H.rounds[R-1];
+  $("roundNum").textContent=R;
+  ["n-fail","n-edit","n-held","n-best","n-hfile","n-big","n-task"].forEach(function(id,i){
+    var on=(id==="n-fail"&&PH===0)||(id==="n-edit"&&PH===1)||(id==="n-held"&&PH===3)||(id==="n-best"&&PH===4)||(id==="n-hfile"&&PH===5)||(id==="n-big"&&PH===6)||(id==="n-task"&&PH===7);
+    $(id).classList.toggle("on",on);
+  });
+  $("t-fail").textContent=rd.failures+" manchetes erradas";
+  $("t-best").textContent=PH>=4?(rd.kept?"1 de 8 sobrevive":"nenhuma superou"):"1 de 8 sobrevive";
+  var ver=R-1+(PH>=5?1:0);
+  $("t-ver").textContent="agora v"+ver;
+  var ss=rd.cands.map(function(c){return c.s;}),lo=Math.min.apply(null,ss),hi=Math.max.apply(null,ss);
+  for(var i=0;i<8;i++){
+    var chip=$("chip"+i),bar=$("bar"+i),c=rd.cands[i];
+    chip.style.display=c?"":"none";bar.style.display=c?"":"none";
+    if(!c)continue;
+    chip.querySelector("title").textContent=editLabel(c.e)+" · held-out "+pct(c.s);
+    chip.classList.toggle("show",PH>=2);
+    chip.classList.toggle("win",PH>=4&&i===rd.best&&rd.kept);
+    var hh=hi>lo?0.25+0.75*(c.s-lo)/(hi-lo):0.6;
+    bar.style.transform="scaleY("+(PH>=3?hh:0.04)+")";
+    bar.classList.toggle("win",PH>=4&&i===rd.best);
+  }
+  var b=rd.cands[rd.best],msg;
+  if(PH<2)msg="Rodada <b>"+R+"</b>: o modelo congelado errou <b>"+rd.failures+"</b> manchetes do conjunto de tarefas.";
+  else if(PH<4)msg="Rodada <b>"+R+"</b>: o editor propôs "+rd.cands.length+" edições; cada uma é avaliada nas "+H.held.length+" perguntas held-out.";
+  else msg=rd.kept?"Rodada <b>"+R+"</b>: venceu <b>"+editLabel(b.e)+"</b>; held-out agora em <b>"+pct(rd.score)+"</b>.":"Rodada <b>"+R+"</b>: nenhuma edição superou o harness atual ("+pct(rd.score)+"); o arquivo fica como está.";
+  $("live").innerHTML=msg;
+  // algoritmo
+  var line=PH===0?1:PH<=2?2:PH===3?3:PH<=5?4:5;
+  Array.prototype.forEach.call($("algo").children,function(li){li.classList.toggle("on",+li.dataset.l===line);});
+  // tabela 1
+  Array.prototype.forEach.call($("t1").tBodies[0].rows,function(tr){tr.classList.toggle("hl",(tr.dataset.who==="editor"&&PH>=1&&PH<=2)||(tr.dataset.who==="big"&&(PH===3||PH>=6)));});
+  $("scrub").value=R;$("scrubv").textContent=R+"/"+H.rounds.length;
+  renderFig2();renderFig3();renderFig4();
+}
+
+function renderFig2(){
+  var s=$("fig2");s.innerHTML="";
+  var N=H.rounds.length,X0=56,X1=530,Y0=250,Y1=40;
+  var all=[H.v0];H.rounds.forEach(function(r){r.cands.forEach(function(c){all.push(c.s);});all.push(r.score);});
+  var lo=Math.max(0,Math.floor((Math.min.apply(null,all)-0.05)*20)/20),hi=Math.min(1,Math.ceil((Math.max.apply(null,all)+0.05)*20)/20);
+  var x=function(r){return X0+(X1-X0)*r/Math.max(N,1);},y=function(v){return Y0-(Y0-Y1)*(v-lo)/((hi-lo)||1);};
+  // grade e eixos
+  var steps=Math.round((hi-lo)/0.05),every=steps>8?2:1;
+  for(var i=0;i<=steps;i+=every){var v=lo+i*0.05;el("line",{x1:X0,x2:X1,y1:y(v),y2:y(v),"class":"faintln"},s);el("text",{x:X0-8,y:y(v)+4,"text-anchor":"end","font-size":11,"class":"it"},s,pct(v));}
+  el("line",{x1:X0,y1:Y0,x2:X1+14,y2:Y0,"class":"ln","marker-end":"url(#ah)"},s);
+  el("line",{x1:X0,y1:Y0,x2:X0,y2:Y1-16,"class":"ln","marker-end":"url(#ah)"},s);
+  for(var r=0;r<=N;r++){el("line",{x1:x(r),x2:x(r),y1:Y0,y2:Y0+5,"class":"ln"},s);el("text",{x:x(r),y:Y0+20,"text-anchor":"middle","font-size":12},s,r);}
+  el("text",{x:(X0+X1)/2,y:Y0+40,"text-anchor":"middle","font-size":13,"class":"it"},s,"rodada");
+  el("text",{x:14,y:(Y0+Y1)/2,"text-anchor":"middle","font-size":13,"class":"it",transform:"rotate(-90 14 "+((Y0+Y1)/2)+")"},s,"nota held-out");
+  // base
+  el("line",{x1:X0,x2:X1,y1:y(H.v0),y2:y(H.v0),"class":"dash"},s);
+  el("text",{x:X1,y:y(H.v0)-6,"text-anchor":"end","font-size":11.5,"class":"it"},s,"base escrita à mão, v0");
+  // linha em degraus
+  var pts=[[x(0),y(H.v0)]],prev=H.v0;
+  H.rounds.forEach(function(rd){pts.push([x(rd.n),y(prev)]);pts.push([x(rd.n),y(rd.score)]);prev=rd.score;});
+  pts.push([X1+6,y(prev)]);
+  var cut=1+2*R; // pontos até a rodada atual
+  var past=pts.slice(0,cut).map(function(p){return p.join(",");}).join(" ");
+  var fut=pts.slice(cut-1).map(function(p){return p.join(",");}).join(" ");
+  el("polyline",{points:fut,"class":"stepln-future"},s);
+  el("polyline",{points:past,"class":"stepln"},s);
+  // pontos rejeitados e mantidos
+  el("circle",{cx:x(0),cy:y(H.v0),r:4,"class":"dot-r"},s);
+  H.rounds.forEach(function(rd){
+    rd.cands.forEach(function(c,i){if(i===rd.best&&rd.kept)return;var jx=x(rd.n)+((i%4)-1.5)*5+6,jy=y(c.s)+(i%3-1)*2;el("circle",{cx:jx,cy:jy,r:3.2,"class":"dot-r"},s);});
+    el("circle",{cx:x(rd.n),cy:y(rd.score),r:rd.n<=R?5:4,"class":rd.n<=R?"dot-k":"dot-r"},s);
+  });
+  var cr=H.rounds[R-1];
+  el("circle",{cx:x(R),cy:y(cr.score),r:13,"class":"halo"},s).parentNode.insertBefore(s.lastChild,s.firstChild);
+  el("circle",{cx:x(R),cy:y(cr.score),r:7,"class":"ring"},s);
+  // legenda
+  var L=el("g",{transform:"translate(74,18)"},s);
+  el("circle",{cx:0,cy:0,r:4.5,"class":"dot-k"},L);el("text",{x:10,y:4,"font-size":12},L,"edição mantida");
+  el("circle",{cx:120,cy:0,r:4,"class":"dot-r"},L);el("text",{x:130,y:4,"font-size":12},L,"edições rejeitadas, 7 por rodada");
+}
+
+var FILE_SVG='<svg viewBox="0 0 34 42"><path class="pg" d="M2,2 h22 l8,8 v30 h-30 z"/><g class="lns"><line x1="8" y1="16" x2="26" y2="16"/><line x1="8" y1="22" x2="26" y2="22"/><line x1="8" y1="28" x2="26" y2="28"/><line x1="8" y1="34" x2="20" y2="34"/></g><line class="x" x1="2" y1="40" x2="32" y2="4"/></svg>';
+function renderFig3(){
+  var box=$("files"),N=H.rounds.length,cur=R-1+(PH>=5?1:0),html="";
+  for(var v=0;v<=N;v++){var cls=v<cur?"old":v===cur?"cur":"fut";html+='<div class="file '+cls+'">'+FILE_SVG+'<span>v'+v+'</span></div>';}
+  box.innerHTML=html;
+}
+
+function renderFig4(){
+  var s=$("fig4");s.innerHTML="";
+  var N=H.rounds.length,X0=96,XB=170,X1=548,rows=[["humano",34],["editor 4B",74],["✳ modelo grande",114]];
+  var cw=(X1-XB)/N,cx=function(r){return XB+cw*(r-1);};
+  rows.forEach(function(r){el("text",{x:0,y:r[1]+5,"font-size":12.5},s,r[0]);el("line",{x1:X0,x2:X1,y1:r[1]+16,y2:r[1]+16,"class":"faintln"},s);});
+  var hb=el("rect",{x:X0,y:24,width:68,height:20,rx:2,"class":"inkfill"},s);
+  el("text",{x:X0+34,y:38,"text-anchor":"middle","font-size":11,"font-weight":600,"class":"ontext"},s,"avaliação");
+  el("line",{x1:XB-2,x2:XB-2,y1:16,y2:136,"class":"ln","stroke-width":1.2},s);
+  el("text",{x:(XB+X1)/2,y:38,"text-anchor":"middle","font-size":11.5,"class":"it"},s,"nada a fazer dentro do loop");
+  for(var r=1;r<=N;r++){
+    var bx=cx(r),act=r===R;
+    el("rect",{x:bx+cw*0.18,y:64,width:Math.min(16,cw*0.3),height:16,rx:2,"class":"blk"+(act&&PH>=1&&PH<=2?" on":"")},s);
+    el("rect",{x:bx+cw*0.32,y:104,width:Math.min(16,cw*0.28),height:16,rx:2,"class":"blk"+(act&&PH===3?" on":"")},s);
+    el("rect",{x:bx+cw*0.62,y:104,width:Math.min(16,cw*0.28),height:16,rx:2,"class":"blk"+(act&&PH>=6?" on":"")},s);
+    el("text",{x:bx+cw/2,y:156,"text-anchor":"middle","font-size":12},s,r);
+    if(r>1)el("line",{x1:bx,x2:bx,y1:16,y2:136,"class":"faintln"},s);
+  }
+  el("text",{x:X0+34,y:156,"text-anchor":"middle","font-size":12,"class":"it"},s,"antes");
+  el("text",{x:(XB+X1)/2,y:180,"text-anchor":"middle","font-size":13,"class":"it"},s,"rodada");
+  var lx=cx(R)+cw/2;
+  el("line",{x1:lx,x2:lx,y1:14,y2:140,"class":"ln","stroke-width":2.2},s);
+  el("path",{d:"M"+(lx-6)+",8 h12 l-6,8 z","class":"inkfill"},s);
+}
+
+function renderLab(){
+  var st=$("stats"),last=H.rounds.length?H.rounds[H.rounds.length-1]:null,fin=last?last.score:H.v0,finT=last?last.taskScore:H.v0t;
+  st.innerHTML='<div><span class="v">'+pct(H.v0)+'</span><span class="l">held-out, v0 à mão</span></div><div><span class="v">'+pct(fin)+'</span><span class="l">held-out, v'+H.rounds.length+' do loop</span></div><div><span class="v">'+pct(finT)+'</span><span class="l">conjunto de tarefas</span></div>';
+  var h0=H.versions[0],out=[];
+  Object.keys(H.final).forEach(function(k){
+    var all=new Set([].concat(Array.from(h0[k]||[]),Array.from(H.final[k]))),parts=[];
+    all.forEach(function(w){var a=h0[k]&&h0[k].has(w),b=H.final[k].has(w);parts.push(a&&b?esc(w):b?'<span class="add">+'+esc(w)+'</span>':'<span class="del">'+esc(w)+'</span>');});
+    out.push(esc(k)+": "+parts.join(", "));
+  });
+  $("hfile").innerHTML=out.join("\n");
+  var rows='<thead><tr><th>rodada</th><th>falhas</th><th>melhor edição</th><th>held-out</th><th>resultado</th></tr></thead><tbody>';
+  H.rounds.forEach(function(rd){var b=rd.cands[rd.best];rows+='<tr><td>'+rd.n+'</td><td>'+rd.failures+'</td><td class="e">'+esc(editLabel(b.e))+'</td><td>'+pct(b.s)+'</td><td>'+(rd.kept?'<span class="pill ok">mantida</span>':'<span class="pill warn">descartada</span>')+'</td></tr>';});
+  if(!H.rounds.length)rows+='<tr><td colspan="5">O harness v0 já acerta todo o conjunto de tarefas; não há falhas para o editor ler.</td></tr>';
+  $("log").innerHTML=rows+'</tbody>';
+}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+
+function renderChecks(items,themes){
+  var c=[],byT={},heldT={};
+  themes.forEach(function(t){byT[t]=0;heldT[t]=0;});
+  items.forEach(function(it){byT[it.theme]++;if(byT[it.theme]%2===0)heldT[it.theme]++;});
+  var heldN=items.length-Math.ceil(0),hn=0;for(var k in heldT)hn+=heldT[k];
+  c.push([hn>=16,"Perguntas held-out: "+hn+(hn>=16?"":" (com menos de 16, cada acerto vale mais de 6 pontos e a nota fica ruidosa)")]);
+  var weak=themes.filter(function(t){return heldT[t]<3;});
+  c.push([!weak.length,weak.length?"Temas com menos de 3 perguntas held-out: "+weak.map(function(t){return THEMES_LABEL[t]||t;}).join(", "):"Todo tema tem pelo menos 3 perguntas held-out"]);
+  var mx=Math.max.apply(null,themes.map(function(t){return byT[t];})),mn=Math.min.apply(null,themes.map(function(t){return byT[t];}));
+  c.push([mn>=mx/2,mn>=mx/2?"Temas equilibrados ("+mn+" a "+mx+" perguntas cada)":"Temas desequilibrados ("+mn+" a "+mx+"): o loop vai otimizar o tema maior"]);
+  var seen={},dup=0;items.forEach(function(it){var k=norm(it.title);if(seen[k])dup++;seen[k]=1;});
+  c.push([dup===0,dup?dup+" manchete(s) repetida(s): podem vazar da tarefa para o held-out":"Nenhuma manchete repetida entre tarefa e held-out"]);
+  $("checks").innerHTML=c.map(function(x){return'<li><span class="pill '+(x[0]?"ok":"warn")+'">'+(x[0]?"✓":"!")+'</span><span>'+esc(x[1])+'</span></li>';}).join("");
+}
+
+function run(){
+  var ph=parseHarness($("h0").value),errs=ph.errs.slice();
+  var pe=parseExam($("exam").value,ph.order);errs=errs.concat(pe.errs);
+  $("errs").innerHTML=errs.length?'<div class="err">'+errs.slice(0,5).map(esc).join("<br>")+(errs.length>5?"<br>… e mais "+(errs.length-5):"")+"</div>":"";
+  if(!ph.order.length){ $("errs").innerHTML='<div class="err">O harness v0 precisa de pelo menos um tema, no formato tema: palavra.</div>';return;}
+  if(pe.items.length<4){ $("errs").innerHTML+='<div class="err">A prova precisa de pelo menos 4 perguntas válidas para dividir entre tarefa e held-out.</div>';return;}
+  renderChecks(pe.items,ph.order);
+  var n=Math.max(1,Math.min(12,parseInt($("rounds").value,10)||8));
+  H=simulate(pe.items,ph.h,n);
+  if(!H.rounds.length){H.rounds=[{n:1,failures:0,cands:[{e:{op:"+",theme:ph.order[0],stem:"—"},s:H.v0,t:H.v0t,h:H.final}],best:0,kept:false,score:H.v0,taskScore:H.v0t}];H.versions.push(H.final);}
+  $("scrub").max=H.rounds.length;
+  R=1;PH=reduce?7:0;
+  renderLab();renderFig1();
+}
+
+function tick(){
+  if(!playing||!H)return;
+  PH++;
+  if(PH>7){PH=0;R=R>=H.rounds.length?1:R+1;}
+  renderFig1();
+}
+function setPlaying(p){
+  playing=p;$("play").textContent=p?"Pausar":"Reproduzir";$("play").setAttribute("aria-pressed",String(p));
+  clearInterval(timer);if(p)timer=setInterval(tick,650);
+}
+
+buildChips();
+$("exam").value=SAMPLE_EXAM;$("h0").value=SAMPLE_H0;
+$("run").addEventListener("click",function(){run();if(!reduce)setPlaying(true);document.getElementById("fig1b").scrollIntoView({behavior:reduce?"auto":"smooth",block:"center"});});
+$("reset").addEventListener("click",function(){$("exam").value=SAMPLE_EXAM;$("h0").value=SAMPLE_H0;$("rounds").value=8;run();});
+$("play").addEventListener("click",function(){setPlaying(!playing);});
+$("scrub").addEventListener("input",function(e){R=+e.target.value;PH=7;setPlaying(false);renderFig1();});
+run();
+if(reduce){setPlaying(false);}else setPlaying(true);
+window.__H=function(){return H;};
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Execução {{ name }}{% endblock %}
+{% block body %}
+<h1>Execução {{ name }}</h1>
+<h2>Rodadas</h2>
+{% for r in hist %}
+<div class="card">
+  <strong>Rodada {{ r.n }}</strong> · {{ r.failures }} falhas no lado tarefa · held-out depois: {{ '%.1f'|format(100*r.heldout) }}%
+  {% if r.kept %}<span class="pill ok">edição mantida</span>{% else %}<span class="pill warn">nenhuma venceu</span>{% endif %}
+  <div class="tablewrap"><table style="margin-top:10px">
+  <thead><tr><th>#</th><th>edição</th><th>held-out</th><th>situação</th></tr></thead><tbody>
+  {% for c in r.candidates %}<tr>
+    <td>e{{ loop.index }}</td>
+    <td><code>{{ c.edit.tipo }}</code>{% if c.edit.indice %} #{{ c.edit.indice }}{% endif %} {{ c.edit.texto or c.edit.caso_id }}<div class="meta">{{ c.edit.motivo }}</div></td>
+    <td>{% if c.heldout is not none %}{{ '%.1f'|format(100*c.heldout) }}%{% else %}—{% endif %}</td>
+    <td>{% if loop.index0 == r.best and r.kept %}<span class="pill ok">mantida</span>{% elif c.rejected %}{{ c.rejected }}{% else %}rejeitada{% endif %}</td>
+  </tr>{% endfor %}
+  </tbody></table></div>
+</div>
+{% endfor %}
+<h2>Relatório</h2><pre>{{ report }}</pre>
+<h2>Harness final</h2><pre>{{ final }}</pre>
+{% endblock %}

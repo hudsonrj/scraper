@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Painel do Newsloop{% endblock %}
+{% block body %}
+<h1>Painel do loop</h1>
+<p class="lead">O modelo congelado classifica notícias do gov.br na árvore de 3 níveis. O loop reescreve o harness; o humano escreve a prova.</p>
+
+<h2>A prova</h2>
+<div class="stats">
+  <div><span class="v">{{ rep.humano }}</span><span class="l">revisados por humano</span></div>
+  <div><span class="v">{{ rep.provisorio }}</span><span class="l">provisórios (rótulo do Cogfy)</span></div>
+  <div><span class="v">{{ rep.tarefa }}</span><span class="l">em uso no lado tarefa</span></div>
+  <div><span class="v">{{ rep.heldout }}</span><span class="l">em uso no held-out</span></div>
+</div>
+<ul class="checks">
+{% for c in rep.checks %}<li><span class="pill {{ 'ok' if c.ok else 'warn' }}">{{ '✓' if c.ok else '!' }}</span><span>{{ c.text }}</span></li>{% endfor %}
+</ul>
+<div class="row"><a class="btn" href="/revisar">Revisar rótulos provisórios</a></div>
+
+<h2>Execuções</h2>
+{% if runs %}
+<div class="tablewrap"><table>
+<thead><tr><th>execução</th><th>rodadas</th><th>edições mantidas</th><th>held-out final</th></tr></thead>
+<tbody>
+{% for r in runs %}<tr><td><a href="/execucoes/{{ r.name }}">{{ r.name }}</a></td><td>{{ r.rounds|length }}</td><td>{{ r.kept }}</td>
+<td>{% if r.rounds %}{{ '%.1f'|format(100*r.rounds[-1].heldout) }}%{% else %}—{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>
+{% else %}
+<p class="meta">Nenhuma execução ainda. No servidor: <code>/root/apps/harnessend/deploy/run-loop.sh</code></p>
+{% endif %}
+
+<h2>Harness ativo{% if h %} · v{{ h.versao }}{% endif %}</h2>
+{% if h %}<p class="meta">Origem: {{ h.origem }}</p>{% endif %}
+<pre>{{ active }}</pre>
+{% endblock %}
