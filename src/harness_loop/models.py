@@ -119,12 +119,23 @@ class OpenAICompatible:
         kwargs = {}
         if json_mode:
             kwargs["response_format"] = {"type": "json_object"}
-        resp = self.client.chat.completions.create(
-            model=self.name,
-            temperature=temperature,
-            messages=[{"role": "user", "content": prompt}],
-            **kwargs,
-        )
+        try:
+            resp = self.client.chat.completions.create(
+                model=self.name,
+                temperature=temperature,
+                messages=[{"role": "user", "content": prompt}],
+                **kwargs,
+            )
+        except Exception as e:
+            # alguns provedores (ex.: Groq) recusam a resposta quando o JSON não valida;
+            # tenta de novo sem o modo estrito e deixa o parser extrair o JSON do texto
+            if not kwargs or "json_validate_failed" not in str(e):
+                raise
+            resp = self.client.chat.completions.create(
+                model=self.name,
+                temperature=temperature,
+                messages=[{"role": "user", "content": prompt + "\n\nResponda apenas com o JSON."}],
+            )
         out = resp.choices[0].message.content or ""
         self.cache.put(k, out)
         return out
