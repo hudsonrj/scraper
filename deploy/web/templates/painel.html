@@ -13,7 +13,7 @@
 <td>{{ d.classificados }}</td><td>{% for t, n in d.temas %}{{ t }} ({{ n }}){% if not loop.last %} · {% endif %}{% endfor %}{% if not d.temas %}—{% endif %}</td></tr>{% endfor %}
 </tbody></table></div>
 {% else %}
-<p class="meta">Nenhum dia coletado ainda. A coleta roda sozinha todo dia às 09:47 e às 21:47. Para coletar agora, no servidor: <code>/root/apps/harnessend/deploy/dou-ingest.sh</code></p>
+<p class="meta">Nenhum dia coletado ainda. A coleta roda sozinha duas vezes por dia. Para coletar agora, no servidor: <code>/root/apps/harnessend/deploy/dou-ingest.sh</code></p>
 {% endif %}
 
 <h2>A prova</h2>

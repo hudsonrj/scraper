@@ -9,6 +9,9 @@ Duas fontes, com o mesmo formato de saída:
 * **leiturajornal** (``www.in.gov.br``): a página de leitura de cada seção
   traz os atos num JSON embutido. Sem cadastro, mas o site bloqueia alguns
   servidores (ex.: data centers fora do Brasil).
+* **github**: o workflow ``dou-ingest`` coleta pela página de leitura nos
+  servidores do GitHub e grava na branch ``dou-dados``; quem é bloqueado lê
+  de lá. Escolha com ``DOU_SOURCE=github``.
 """
 
 import html
@@ -199,6 +202,34 @@ def fetch_day_inlabs(day: date, sections: Iterable[str] = SECTIONS) -> List[Dict
     return acts
 
 
+# ---------------- espelho no GitHub ----------------
+
+MIRROR = "https://raw.githubusercontent.com/hudsonrj/scraper/dou-dados/dou"
+
+
+def fetch_day_mirror(day: date) -> List[Dict]:
+    """Atos já coletados pelo GitHub Actions (branch dou-dados).
+
+    Para servidores que o in.gov.br bloqueia. Devolve [] se o dia não existe lá.
+    """
+    base = os.getenv("DOU_MIRROR_URL", MIRROR).rstrip("/")
+    url = f"{base}/{day.isoformat()}.jsonl"
+    last = None
+    for i in range(3):
+        try:
+            r = requests.get(url, headers=UA, timeout=60)
+            if r.status_code == 404:
+                return []
+            if r.status_code == 200:
+                r.encoding = "utf-8"
+                return [json.loads(x) for x in r.text.splitlines() if x.strip()]
+            last = f"HTTP {r.status_code}"
+        except requests.RequestException as e:
+            last = e
+        time.sleep(2 * (i + 1))
+    raise RuntimeError(f"espelho do DOU no GitHub não respondeu ({url}): {last}")
+
+
 # ---------------- leiturajornal ----------------
 
 def fetch_day(day: date, sections: Iterable[str] = SECTIONS) -> List[Dict]:
@@ -206,7 +237,10 @@ def fetch_day(day: date, sections: Iterable[str] = SECTIONS) -> List[Dict]:
 
     Usa o INLABS quando há credenciais; senão, a página de leitura.
     """
-    if inlabs_enabled():
+    source = (os.getenv("DOU_SOURCE") or "").lower()
+    if source == "github":
+        return fetch_day_mirror(day)
+    if source == "inlabs" or (not source and inlabs_enabled()):
         return fetch_day_inlabs(day, sections)
     return fetch_day_leitura(day, sections)
 

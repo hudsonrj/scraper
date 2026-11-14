@@ -142,6 +142,18 @@ if [ -n "$(env_get ANTHROPIC_API_KEY "$ENV")$(env_get DEEPSEEK_API_KEY "$ENV")" 
     echo "Modelos: DeepSeek (deepseek-flash congelado e editor, deepseek-v4-pro sugere rótulos)"
 fi
 
+say "Acesso ao Diário Oficial"
+if [ -z "$(env_get DOU_SOURCE "$ENV")" ]; then
+  if curl -fsS -m 20 -A "Mozilla/5.0" -o /dev/null "https://www.in.gov.br/leiturajornal?secao=do1" 2>/dev/null; then
+    echo "in.gov.br acessível: coleta direta"
+  else
+    env_set DOU_SOURCE github
+    echo "in.gov.br bloqueia este servidor: a coleta vai ler o espelho do GitHub (branch dou-dados)"
+  fi
+else
+  echo "DOU_SOURCE=$(env_get DOU_SOURCE "$ENV") (definido no .env)"
+fi
+
 say "Porta interna"
 UNIT=/etc/systemd/system/newsloop-web.service
 if [ -z "$PORT" ] && [ -f "$UNIT" ]; then PORT="$(grep -oP '127\.0\.0\.1:\K[0-9]+' "$UNIT" | head -1)"; fi
@@ -228,10 +240,10 @@ ExecStart=$APP_DIR/deploy/dou-ingest.sh
 EOT
 cat > /etc/systemd/system/newsloop-dou.timer <<EOT
 [Unit]
-Description=newsloop: coleta do DOU às 09:47 e 21:47
+Description=newsloop: coleta do DOU (depois do GitHub Actions: 13:17 e 01:17 UTC)
 
 [Timer]
-OnCalendar=*-*-* 09:47,21:47
+OnCalendar=*-*-* 13:17,01:17 UTC
 Persistent=true
 
 [Install]

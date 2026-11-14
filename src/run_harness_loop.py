@@ -123,7 +123,8 @@ def cmd_dou_ingest(args):
     from harness_loop.dou import fetch_day, parse_day
 
     day = parse_day(args.date)
-    path = os.path.join(DOU_DIR, f"{day.isoformat()}.jsonl")
+    out_dir = getattr(args, "out", None) or DOU_DIR
+    path = os.path.join(out_dir, f"{day.isoformat()}.jsonl")
     try:
         acts = fetch_day(day)
     except RuntimeError as e:
@@ -135,7 +136,7 @@ def cmd_dou_ingest(args):
             os.remove(path)
         print(f"DOU {day.isoformat()}: nenhum ato publicado")
         return 2
-    os.makedirs(DOU_DIR, exist_ok=True)
+    os.makedirs(out_dir, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         for a in acts:
             f.write(json.dumps(a, ensure_ascii=False) + "\n")
@@ -368,6 +369,7 @@ def main(argv=None):
 
     di = sub.add_parser("dou-ingest", help="baixa tudo o que saiu no DOU num dia")
     di.add_argument("--date", help="AAAA-MM-DD (padrão: hoje, ou o último dia útil)")
+    di.add_argument("--out", help="pasta de saída (padrão: <dados>/dou)")
     for name in ("eval", "loop", "dou-classify"):
         s = sub.add_parser(name)
         s.add_argument("--harness", default=ACTIVE)

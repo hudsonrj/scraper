@@ -316,3 +316,25 @@ def test_inlabs_login_reports_maintenance(monkeypatch):
     monkeypatch.setattr(dou.time, "sleep", lambda s: None)
     with pytest.raises(RuntimeError, match="manutenção"):
         dou.inlabs_session()
+
+
+def test_mirror_source(monkeypatch):
+    from datetime import date
+
+    from src.harness_loop import dou
+
+    class R:
+        def __init__(self, code, text=""):
+            self.status_code, self.text, self.encoding = code, text, None
+
+    calls = []
+
+    def fake_get(url, headers=None, timeout=None):
+        calls.append(url)
+        return R(200, '{"id": "dou-1", "secao": "do1"}\n') if url.endswith("2026-11-13.jsonl") else R(404)
+
+    monkeypatch.setenv("DOU_SOURCE", "github")
+    monkeypatch.setattr(dou.requests, "get", fake_get)
+    assert dou.fetch_day(date(2026, 11, 13)) == [{"id": "dou-1", "secao": "do1"}]
+    assert dou.fetch_day(date(2026, 11, 15)) == []
+    assert calls[0] == "https://raw.githubusercontent.com/hudsonrj/scraper/dou-dados/dou/2026-11-13.jsonl"

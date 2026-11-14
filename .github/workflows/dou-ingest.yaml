@@ -1,0 +1,96 @@
+name: Coleta do Diário Oficial (newsloop)
+
+# Baixa tudo o que saiu no DOU (todas as seções, inclusive extras) e grava em
+# arquivos JSONL na branch dou-dados. Servidores que o in.gov.br bloqueia leem
+# de lá (DOU_SOURCE=github no newsloop).
+
+on:
+  schedule:
+    - cron: "30 12 * * *"   # 09:30 em Brasília
+    - cron: "30 0 * * *"    # 21:30 em Brasília (pega edições extras)
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Dia (AAAA-MM-DD). Vazio: hoje e o dia útil anterior"
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dou-ingest
+  cancel-in-progress: false
+
+env:
+  CODE_REF: claude/festive-planck-2n2ryb   # onde está o coletor (src/harness_loop)
+  DATA_BRANCH: dou-dados
+  TZ: America/Sao_Paulo
+
+jobs:
+  coletar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Código do coletor
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CODE_REF }}
+          path: code
+
+      - name: Branch de dados
+        run: |
+          git clone --quiet --depth 1 --branch "$DATA_BRANCH" \
+            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data \
+          || { mkdir data && cd data && git init --quiet && git checkout --quiet --orphan "$DATA_BRANCH" \
+               && git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"; }
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependências
+        run: pip install --quiet requests==2.32.3 pyyaml==6.0.2 python-dotenv==1.0.1
+
+      - name: Coletar
+        env:
+          DOU_SOURCE: leiturajornal
+          HARNESS_DIR: ${{ github.workspace }}/data
+        run: |
+          if [ -n "${{ inputs.date }}" ]; then
+            days="${{ inputs.date }}"
+          else
+            days="$(python3 - <<'PY'
+          from datetime import date, timedelta
+          d = date.today(); out = [d]
+          p = d - timedelta(days=1)
+          while p.weekday() >= 5:
+              p -= timedelta(days=1)
+          out.append(p)
+          print(" ".join(x.isoformat() for x in out))
+          PY
+          )"
+          fi
+          fail=0
+          for d in $days; do
+            set +e
+            python code/src/run_harness_loop.py dou-ingest --date "$d" --out data/dou
+            rc=$?
+            set -e
+            # 0 = coletado, 2 = dia sem publicação, 1 = in.gov.br falhou
+            [ "$rc" = 1 ] && fail=1
+          done
+          ls -la data/dou 2>/dev/null | tail -5 || true
+          exit $fail
+
+      - name: Gravar na branch de dados
+        if: always()
+        run: |
+          cd data
+          [ -d dou ] || exit 0
+          git config user.name "newsloop-bot"
+          git config user.email "newsloop-bot@users.noreply.github.com"
+          git add dou
+          if git diff --cached --quiet; then echo "Nada novo."; exit 0; fi
+          git commit --quiet -m "DOU: $(ls dou | sed 's/.jsonl//' | sort | tail -2 | tr '\n' ' ')"
+          for i in 1 2 3; do git push --quiet origin "HEAD:$DATA_BRANCH" && exit 0; sleep $((i*5)); git pull --quiet --rebase origin "$DATA_BRANCH" || true; done
+          exit 1
