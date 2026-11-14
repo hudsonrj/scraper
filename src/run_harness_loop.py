@@ -375,6 +375,8 @@ def cmd_promote(args):
 def main(argv=None):
     load_dotenv()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+    for noisy in ("httpx", "openai", "anthropic"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)  # uma linha por chamada não ajuda ninguém
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--cases", default=CASES, help="arquivo JSONL da prova")
     p.add_argument("--allow-provisional", action="store_true",
