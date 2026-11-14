@@ -14,6 +14,7 @@ DOMAIN="${DOMAIN:-newsloop.ch8ai.com.br}"
 PORT="${PORT:-}"
 
 say(){ printf '\n\033[1m== %s\033[0m\n' "$*"; }
+trap 'echo; echo "ERRO na linha $LINENO: $BASH_COMMAND"; echo "Cole esta saída na conversa."' ERR
 [ "$(id -u)" = 0 ] || { echo "Rode como root."; exit 1; }
 
 say "Pacotes do sistema"
@@ -36,7 +37,7 @@ fi
 say "Dados em $DATA_DIR (fora do git: revisões e execuções nunca são sobrescritas)"
 if [ ! -f "$DATA_DIR/exam/cases.jsonl" ]; then
   mkdir -p "$DATA_DIR"
-  cp -rn "$APP_DIR/harness/." "$DATA_DIR/"
+  cp -r "$APP_DIR/harness/." "$DATA_DIR/"
 fi
 mkdir -p "$DATA_DIR/runs" "$DATA_DIR/.cache"
 
@@ -71,7 +72,7 @@ fi
 say "Chaves de API reaproveitadas de outras aplicações"
 # Procura cada chave nos .env das outras aplicações do servidor e copia a primeira
 # encontrada. Só mostra de onde veio, nunca o valor.
-env_get(){ grep -E "^(export +)?$1=" "$2" 2>/dev/null | tail -1 | sed -E "s/^(export +)?$1=//; s/^[\"']//; s/[\"'] *$//; s/ +#.*$//"; }
+env_get(){ { grep -E "^(export +)?$1=" "$2" 2>/dev/null || true; } | tail -1 | sed -E "s/^(export +)?$1=//; s/^[\"']//; s/[\"'] *$//; s/ +#.*$//"; }
 env_set(){
   if grep -qE "^$1=" "$ENV"; then
     python3 - "$ENV" "$1" "$2" <<'PY'
@@ -100,7 +101,11 @@ chmod 600 "$ENV"
 
 # Editor pequeno local: se o Ollama estiver rodando com um modelo pequeno, usa ele.
 if [ -z "$(env_get EDITOR_BASE_URL "$ENV")" ] && command -v curl >/dev/null; then
-  tags="$(curl -fsS -m 3 http://127.0.0.1:11434/api/tags 2>/dev/null || true)"
+  tags=""; OLLAMA_PORT=""
+  for op in 11434 11435; do
+    tags="$(curl -fsS -m 3 "http://127.0.0.1:$op/api/tags" 2>/dev/null || true)"
+    [ -n "$tags" ] && { OLLAMA_PORT=$op; break; }
+  done
   if [ -n "$tags" ]; then
     small="$(printf '%s' "$tags" | python3 -c '
 import json,sys,re
@@ -109,7 +114,7 @@ pick=[n for n in names if re.search(r"(^|[:\-_])(1\.5|3|4|7|8)b", n)]
 pref=[n for n in pick if "qwen" in n] or pick
 print(pref[0] if pref else "")' 2>/dev/null || true)"
     if [ -n "$small" ]; then
-      env_set EDITOR_BASE_URL "http://127.0.0.1:11434/v1"
+      env_set EDITOR_BASE_URL "http://127.0.0.1:$OLLAMA_PORT/v1"
       env_set EDITOR_MODEL "$small"
       echo "Editor: Ollama local com $small (o modelo pequeno do artigo)"
     else
@@ -273,5 +278,9 @@ say "Pronto"
 echo "Site:     https://$DOMAIN"
 echo "Painel:   https://$DOMAIN/painel"
 echo "Revisão:  https://$DOMAIN/revisar  (usuário e senha em $ENV)"
-echo "Loop:     preencha OPENAI_API_KEY em $ENV e rode $APP_DIR/deploy/run-loop.sh --rounds 2"
+if [ -n "$(env_get OPENAI_API_KEY "$ENV")$(env_get ANTHROPIC_API_KEY "$ENV")" ]; then
+  echo "Loop:     $APP_DIR/deploy/run-loop.sh --rounds 2"
+else
+  echo "Loop:     preencha OPENAI_API_KEY ou ANTHROPIC_API_KEY em $ENV e rode $APP_DIR/deploy/run-loop.sh --rounds 2"
+fi
 echo "Semanal:  systemctl enable --now newsloop-loop.timer"
