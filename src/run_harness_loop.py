@@ -129,7 +129,11 @@ def cmd_suggest(args):
     if not todo:
         print("Nenhum caso sem tema.")
         return 0
-    model = from_env("suggest", DiskCache(CACHE), CallCounter())
+    try:
+        model = from_env("suggest", DiskCache(CACHE), CallCounter())
+    except ValueError as e:
+        print(f"Erro: {e}")
+        return 1
     print(f"Pedindo tema a {model.name} para {len(todo)} casos...")
     n = suggest_labels(todo, Harness.load(ACTIVE), model, tax, workers=args.workers)
     save_cases(args.cases, cases)

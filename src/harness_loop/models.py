@@ -235,6 +235,24 @@ DEFAULTS = {
 }
 
 
+def clean_key(name: str, value: Optional[str]) -> Optional[str]:
+    """Tira espaços e aspas; recusa caracteres fora do ASCII com uma mensagem clara.
+
+    Chave colada de um editor com formatação costuma trazer aspas tipográficas
+    ou caracteres invisíveis, e aí toda chamada falha com 'ascii codec'.
+    """
+    if not value:
+        return value
+    v = value.strip().strip("\"'“”‘’").strip()
+    bad = [i for i, c in enumerate(v) if ord(c) > 127]
+    if bad:
+        raise ValueError(
+            f"{name} no .env tem {len(bad)} caractere(s) fora do ASCII (posições {bad[:5]}); "
+            "provavelmente a chave foi colada com formatação. Apague a linha e escreva a chave de novo."
+        )
+    return v
+
+
 def provider_for(role: str) -> str:
     p = role.upper()
     explicit = (os.getenv(f"{p}_PROVIDER") or "").strip().lower()
@@ -259,7 +277,7 @@ def from_env(role: str, cache: DiskCache, counter: CallCounter, default_model: O
     if provider == "anthropic":
         return AnthropicModel(
             model=model,
-            api_key=os.getenv(f"{p}_API_KEY") or None,
+            api_key=clean_key(f"{p}_API_KEY ou ANTHROPIC_API_KEY", os.getenv(f"{p}_API_KEY") or os.getenv("ANTHROPIC_API_KEY")),
             effort=os.getenv(f"{p}_EFFORT", {"big": "low", "suggest": "high"}.get(role, "medium")),
             max_tokens=16000 if role == "editor" else 8000,
             cache=cache,
@@ -269,7 +287,7 @@ def from_env(role: str, cache: DiskCache, counter: CallCounter, default_model: O
         return OpenAICompatible(
             model=model,
             base_url=os.getenv(f"{p}_BASE_URL") or DEEPSEEK_URL,
-            api_key=os.getenv(f"{p}_API_KEY") or os.getenv("DEEPSEEK_API_KEY"),
+            api_key=clean_key(f"{p}_API_KEY ou DEEPSEEK_API_KEY", os.getenv(f"{p}_API_KEY") or os.getenv("DEEPSEEK_API_KEY")),
             cache=cache,
             counter=counter,
             # classificar não precisa de raciocínio longo; sugerir e editar, um pouco mais
@@ -278,7 +296,7 @@ def from_env(role: str, cache: DiskCache, counter: CallCounter, default_model: O
     return OpenAICompatible(
         model=model,
         base_url=os.getenv(f"{p}_BASE_URL") or None,
-        api_key=os.getenv(f"{p}_API_KEY") or None,
+        api_key=clean_key(f"{p}_API_KEY ou OPENAI_API_KEY", os.getenv(f"{p}_API_KEY") or os.getenv("OPENAI_API_KEY")) or None,
         cache=cache,
         counter=counter,
         effort=os.getenv(f"{p}_EFFORT") or None,

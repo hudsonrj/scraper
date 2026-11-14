@@ -338,3 +338,12 @@ def test_mirror_source(monkeypatch):
     assert dou.fetch_day(date(2026, 11, 13)) == [{"id": "dou-1", "secao": "do1"}]
     assert dou.fetch_day(date(2026, 11, 15)) == []
     assert calls[0] == "https://raw.githubusercontent.com/hudsonrj/scraper/dou-dados/dou/2026-11-13.jsonl"
+
+
+def test_keys_with_non_ascii_are_rejected_clearly():
+    from src.harness_loop.models import clean_key
+
+    assert clean_key("K", ' "sk-abc" ') == "sk-abc"
+    assert clean_key("K", "\u201csk-abc\u201d") == "sk-abc"
+    with pytest.raises(ValueError, match="fora do ASCII"):
+        clean_key("K", "sk-abc\u200bdef")
