@@ -117,6 +117,29 @@ def cmd_build(args):
     return 0
 
 
+def cmd_suggest(args):
+    from collections import Counter
+
+    from harness_loop.models import CallCounter, DiskCache, from_env
+    from harness_loop.suggest import suggest_labels
+
+    tax = Taxonomy.load()
+    cases = load_cases(args.cases)
+    todo = [c for c in cases if c.status == "sem_rotulo"]
+    if not todo:
+        print("Nenhum caso sem tema.")
+        return 0
+    model = from_env("suggest", DiskCache(CACHE), CallCounter())
+    print(f"Pedindo tema a {model.name} para {len(todo)} casos...")
+    n = suggest_labels(todo, Harness.load(ACTIVE), model, tax, workers=args.workers)
+    save_cases(args.cases, cases)
+    print(f"{n} de {len(todo)} com tema sugerido (provisório até revisar em /revisar)")
+    erros = Counter(c.note for c in todo if c.status == "sem_rotulo" and c.note)
+    for e, k in erros.most_common(3):
+        print(f"  {k}x {e}")
+    return 0 if n else 1
+
+
 def cmd_dou_ingest(args):
     import json
 
@@ -367,6 +390,8 @@ def main(argv=None):
                    help="DOU: usa o texto completo (a classificação diária usa só o trecho do índice)")
     sub.add_parser("review", help="revisão humana dos rótulos")
 
+    sg = sub.add_parser("suggest", help="pede tema sugerido para os casos ainda sem rótulo")
+    sg.add_argument("--workers", type=int, default=4)
     di = sub.add_parser("dou-ingest", help="baixa tudo o que saiu no DOU num dia")
     di.add_argument("--date", help="AAAA-MM-DD (padrão: hoje, ou o último dia útil)")
     di.add_argument("--out", help="pasta de saída (padrão: <dados>/dou)")
@@ -395,7 +420,7 @@ def main(argv=None):
     return {
         "check": cmd_check, "build": cmd_build, "review": cmd_review,
         "eval": cmd_eval, "loop": cmd_loop, "promote": cmd_promote,
-        "dou-ingest": cmd_dou_ingest, "dou-classify": cmd_dou_classify,
+        "dou-ingest": cmd_dou_ingest, "dou-classify": cmd_dou_classify, "suggest": cmd_suggest,
     }[args.cmd](args)
 
 

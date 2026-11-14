@@ -23,7 +23,8 @@ def suggest_labels(cases: List[Case], h: Harness, model: ChatModel, tax: Taxonom
         try:
             raw = model.complete(prompt, temperature=0.0, json_mode=True, prefix=tree)
         except Exception as e:  # sem sugestão: a pessoa rotula do zero
-            c.note = f"sem sugestão ({str(e)[:80]})"
+            cause = getattr(e, "__cause__", None)
+            c.note = f"sem sugestão ({str(e)[:120]}{f' / causa: {str(cause)[:120]}' if cause else ''})"
             return 0
         code, valid, _ = parse_prediction(raw, tax)
         if valid:

@@ -346,7 +346,7 @@ def sample_cases(n: int, days: int = 10, seed: int = 7, with_text: bool = True) 
                 logging.warning("texto de %s: %s", a["id"], e)
             time.sleep(0.3)
         cases.append(to_case(a, text))
-        if i % 20 == 0:
+        if with_text and i % 20 == 0:
             logging.info("textos completos: %d/%d", i, len(picked))
     return cases
 
