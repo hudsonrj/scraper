@@ -226,7 +226,7 @@ say "Proxy reverso para $DOMAIN"
 caddy_validate(){
   (
     set +u
-    for f in $(systemctl show caddy -p EnvironmentFiles --value 2>/dev/null | grep -oE '(^|[[:space:]])-?/[^ ]+' | tr -d ' -'); do
+    for f in $(systemctl show caddy -p EnvironmentFiles --value 2>/dev/null | grep -oE '(^|[[:space:]])-?/[^ ]+' | sed -E 's/^[[:space:]]*-?//'); do
       [ -f "$f" ] && { set -a; . "$f"; set +a; }
     done
     envs="$(systemctl show caddy -p Environment --value 2>/dev/null)"
