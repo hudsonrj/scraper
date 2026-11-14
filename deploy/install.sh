@@ -141,17 +141,46 @@ fi
 [ -n "$PORT" ] || { echo "Nenhuma porta livre na lista; rode com PORT=xxxx"; exit 1; }
 echo "porta $PORT"
 
+say "Onde está o proxy (Caddy no host, Caddy em Docker ou nginx)"
+PROXY=""; CADDYFILE=""; CADDY_CT=""; UPSTREAM_HOST="127.0.0.1"; EXTRA_BIND=""
+if command -v docker >/dev/null && docker info >/dev/null 2>&1; then
+  CADDY_CT="$(docker ps --format '{{.Names}} {{.Image}}' | awk 'tolower($2) ~ /caddy/ {print $1; exit}')"
+fi
+if [ -n "$CADDY_CT" ]; then
+  PROXY=caddy-docker
+  # arquivo do host montado como /etc/caddy/Caddyfile (ou a pasta /etc/caddy)
+  while IFS='|' read -r src dst; do
+    if [ "$dst" = "/etc/caddy/Caddyfile" ]; then CADDYFILE="$src"; fi
+    if [ -z "$CADDYFILE" ] && [ "$dst" = "/etc/caddy" ] && [ -f "$src/Caddyfile" ]; then CADDYFILE="$src/Caddyfile"; fi
+  done < <(docker inspect -f '{{range .Mounts}}{{.Source}}|{{.Destination}}{{"\n"}}{{end}}' "$CADDY_CT")
+  NETMODE="$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$CADDY_CT")"
+  if [ "$NETMODE" != "host" ]; then
+    # o contêiner alcança o host pelo gateway da rede dele
+    UPSTREAM_HOST="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.Gateway}} {{end}}' "$CADDY_CT" | awk '{print $1}')"
+    EXTRA_BIND="--bind $UPSTREAM_HOST:$PORT"
+  fi
+  echo "Caddy em Docker: contêiner $CADDY_CT, rede $NETMODE, Caddyfile ${CADDYFILE:-não encontrado}, upstream $UPSTREAM_HOST:$PORT"
+elif command -v caddy >/dev/null && [ -f /etc/caddy/Caddyfile ]; then
+  PROXY=caddy-host; CADDYFILE=/etc/caddy/Caddyfile
+  echo "Caddy no host: $CADDYFILE"
+elif command -v nginx >/dev/null; then
+  PROXY=nginx; echo "nginx no host"
+else
+  echo "Nenhum proxy encontrado."
+fi
+
 say "Serviço systemd newsloop-web"
 cat > "$UNIT" <<EOT
 [Unit]
 Description=newsloop: painel do loop de harness
-After=network.target
+After=network.target docker.service
 
 [Service]
 WorkingDirectory=$APP_DIR/deploy/web
 EnvironmentFile=$ENV
-ExecStart=$APP_DIR/.venv/bin/gunicorn --workers 1 --threads 4 --bind 127.0.0.1:$PORT --access-logfile - app:app
+ExecStart=$APP_DIR/.venv/bin/gunicorn --workers 1 --threads 4 --bind 127.0.0.1:$PORT $EXTRA_BIND --access-logfile - app:app
 Restart=on-failure
+RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
@@ -180,33 +209,64 @@ chmod +x "$APP_DIR/deploy/run-loop.sh"
 systemctl daemon-reload
 systemctl enable -q --now newsloop-web
 systemctl restart newsloop-web
-sleep 2
+sleep 3
 curl -fsS "http://127.0.0.1:$PORT/saude" >/dev/null && echo "app respondendo em 127.0.0.1:$PORT" || { journalctl -u newsloop-web -n 30 --no-pager; exit 1; }
+if [ -n "$EXTRA_BIND" ] && command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
+  ufw allow from 172.16.0.0/12 to any port "$PORT" proto tcp >/dev/null && echo "ufw: porta $PORT liberada só para redes Docker"
+fi
 
 say "Proxy reverso para $DOMAIN"
-if command -v caddy >/dev/null && [ -f /etc/caddy/Caddyfile ]; then
-  if grep -q "^$DOMAIN" /etc/caddy/Caddyfile; then
-    sed -i "/^$DOMAIN {/,/^}/ s#reverse_proxy .*#reverse_proxy 127.0.0.1:$PORT#" /etc/caddy/Caddyfile
+add_caddy_block(){
+  local f="$1"
+  if grep -qE "^[[:space:]]*(https?://)?$DOMAIN([[:space:],{]|$)" "$f"; then
+    sed -i -E "/^[[:space:]]*(https?:\/\/)?${DOMAIN//./\\.}/,/^}/ s#reverse_proxy .*#reverse_proxy $UPSTREAM_HOST:$PORT#" "$f"
+    echo "Bloco $DOMAIN já existia em $f: upstream atualizado"
   else
-    cp /etc/caddy/Caddyfile "/etc/caddy/Caddyfile.bak.$(date +%s)"
-    printf '\n%s {\n\treverse_proxy 127.0.0.1:%s\n}\n' "$DOMAIN" "$PORT" >> /etc/caddy/Caddyfile
+    cp "$f" "$f.bak.$(date +%s)"
+    printf '\n%s {\n\treverse_proxy %s:%s\n}\n' "$DOMAIN" "$UPSTREAM_HOST" "$PORT" >> "$f"
+    echo "Bloco $DOMAIN adicionado em $f (cópia de segurança ao lado)"
   fi
-  caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
-  systemctl reload caddy
-  echo "Caddy recarregado: https://$DOMAIN"
-elif command -v nginx >/dev/null; then
-  cat > /etc/nginx/sites-available/newsloop <<EOT
+}
+case "$PROXY" in
+  caddy-host)
+    add_caddy_block "$CADDYFILE"
+    caddy validate --config "$CADDYFILE" --adapter caddyfile >/dev/null
+    systemctl reload caddy
+    ;;
+  caddy-docker)
+    if [ -z "$CADDYFILE" ]; then
+      echo "Não achei o Caddyfile montado no contêiner $CADDY_CT. Adicione manualmente:"
+      printf '\n%s {\n\treverse_proxy %s:%s\n}\n' "$DOMAIN" "$UPSTREAM_HOST" "$PORT"
+      exit 1
+    fi
+    add_caddy_block "$CADDYFILE"
+    docker exec "$CADDY_CT" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
+    docker exec "$CADDY_CT" caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+    ;;
+  nginx)
+    cat > /etc/nginx/sites-available/newsloop <<EOT
 server {
   listen 80;
   server_name $DOMAIN;
   location / { proxy_pass http://127.0.0.1:$PORT; proxy_set_header Host \$host; proxy_set_header X-Forwarded-Proto \$scheme; }
 }
 EOT
-  ln -sf /etc/nginx/sites-available/newsloop /etc/nginx/sites-enabled/newsloop
-  nginx -t && systemctl reload nginx
-  echo "nginx configurado em HTTP. Para HTTPS: certbot --nginx -d $DOMAIN"
+    ln -sf /etc/nginx/sites-available/newsloop /etc/nginx/sites-enabled/newsloop
+    nginx -t && systemctl reload nginx
+    command -v certbot >/dev/null && certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email || echo "Para HTTPS: certbot --nginx -d $DOMAIN"
+    ;;
+  *)
+    echo "O app está em 127.0.0.1:$PORT; configure o proxy para $DOMAIN."
+    ;;
+esac
+
+say "Verificação"
+sleep 5
+if curl -fsS -m 20 "https://$DOMAIN/saude" 2>/dev/null | grep -q '"ok"'; then
+  echo "OK: https://$DOMAIN responde com o newsloop"
 else
-  echo "Nem Caddy nem nginx encontrados. O app está em 127.0.0.1:$PORT; configure o proxy."
+  echo "Ainda não responde por HTTPS. O certificado pode levar até 1 minuto."
+  echo "Rode depois: bash $APP_DIR/deploy/diagnose.sh"
 fi
 
 say "Pronto"
