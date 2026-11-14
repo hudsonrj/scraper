@@ -8,6 +8,9 @@ on:
   schedule:
     - cron: "30 12 * * *"   # 09:30 em Brasília
     - cron: "30 0 * * *"    # 21:30 em Brasília (pega edições extras)
+  push:                     # roda quando este arquivo muda na main (para validar ajustes)
+    branches: [main]
+    paths: [.github/workflows/dou-ingest.yaml]
   workflow_dispatch:
     inputs:
       date:
