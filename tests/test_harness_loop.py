@@ -248,3 +248,71 @@ def test_dou_blocked_page_is_reported(monkeypatch):
     monkeypatch.setattr(dou.time, "sleep", lambda s: None)
     with pytest.raises(RuntimeError, match="Acesso negado"):
         dou.fetch_day(date(2026, 11, 13))
+
+
+def _inlabs_zip():
+    import io
+    import zipfile
+
+    xml = '''<?xml version="1.0" encoding="UTF-8"?>
+<xml><article id="31000001" name="PORTARIA 123" idOficio="1" pubName="DO1" artType="Portaria" pubDate="13/11/2026"
+  artClass="00001" artCategory="Ministério da Saúde/Secretaria de Vigilância em Saúde" artSize="12" numberPage="45"
+  pdfPage="http://pesquisa.in.gov.br/imprensa/jsp/visualiza/index.jsp?data=13/11/2026&amp;jornal=515&amp;pagina=45"
+  editionNumber="214" idMateria="744000123">
+<body><Identifica><![CDATA[PORTARIA Nº 123, DE 12 DE NOVEMBRO DE 2026]]></Identifica><Data></Data>
+<Ementa><![CDATA[Institui a campanha nacional de vacinação.]]></Ementa><Titulo></Titulo><SubTitulo></SubTitulo>
+<Texto><![CDATA[<p class="identifica">PORTARIA Nº 123</p><p>O MINISTRO DA SAÚDE resolve: Art. 1º Fica instituída a campanha.</p>]]></Texto>
+</body><Midias></Midias></article></xml>'''
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("515_20261113_744000123.xml", xml)
+        z.writestr("imagem.jpg", b"x")
+    return buf.getvalue()
+
+
+def test_inlabs_zip_parsing():
+    from datetime import date
+
+    from src.harness_loop import dou
+
+    acts = dou.parse_inlabs_zip(_inlabs_zip(), date(2026, 11, 13), "do1")
+    assert len(acts) == 1
+    a = acts[0]
+    assert a["id"] == "dou-744000123"
+    assert a["tipo"] == "Portaria"
+    assert a["titulo"] == "PORTARIA Nº 123, DE 12 DE NOVEMBRO DE 2026"
+    assert a["orgao"] == "Ministério da Saúde/Secretaria de Vigilância em Saúde"
+    assert a["trecho"].startswith("Institui a campanha nacional de vacinação.")
+    assert "Art. 1º Fica instituída" in a["texto"] and "<p" not in a["texto"]
+    c = dou.to_case(a)
+    assert c.category == "Seção 1 · Portaria" and c.agency == "Ministério da Saúde/Secretaria de Vigilância em Saúde"
+
+
+def test_fetch_day_uses_inlabs_when_configured(monkeypatch):
+    from datetime import date
+
+    from src.harness_loop import dou
+
+    monkeypatch.setenv("INLABS_EMAIL", "a@b.c")
+    monkeypatch.setenv("INLABS_SENHA", "x")
+    monkeypatch.setattr(dou, "inlabs_session", lambda: object())
+    monkeypatch.setattr(dou, "inlabs_zip", lambda s, d, sec: _inlabs_zip() if sec == "do1" else None)
+    monkeypatch.setattr(dou.time, "sleep", lambda s: None)
+    monkeypatch.setattr(dou, "fetch_day_leitura", lambda *a, **k: pytest.fail("não devia usar a página de leitura"))
+    acts = dou.fetch_day(date(2026, 11, 13))
+    assert [a["id"] for a in acts] == ["dou-744000123"]
+
+
+def test_inlabs_login_reports_maintenance(monkeypatch):
+    from src.harness_loop import dou
+
+    class R:
+        status_code = 200
+        text = "<title>Manutenção Programada — Imprensa Nacional - INLABS</title>"
+
+    monkeypatch.setenv("INLABS_EMAIL", "a@b.c")
+    monkeypatch.setenv("INLABS_SENHA", "x")
+    monkeypatch.setattr(dou.requests.Session, "post", lambda self, *a, **k: R())
+    monkeypatch.setattr(dou.time, "sleep", lambda s: None)
+    with pytest.raises(RuntimeError, match="manutenção"):
+        dou.inlabs_session()

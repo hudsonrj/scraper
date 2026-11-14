@@ -55,6 +55,9 @@ if [ ! -f "$ENV" ]; then
 HARNESS_DIR=$DATA_DIR
 PAINEL_USUARIO=admin
 PAINEL_SENHA=$SENHA
+# DOU pelo INLABS (cadastro gratuito em https://inlabs.in.gov.br): preencha para usar.
+INLABS_EMAIL=
+INLABS_SENHA=
 # Chaves: o instalador copia de outras aplicações do servidor quando encontra.
 DEEPSEEK_API_KEY=
 OPENAI_API_KEY=

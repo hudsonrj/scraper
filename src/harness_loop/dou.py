@@ -1,13 +1,23 @@
-"""Coleta do Diário Oficial da União (in.gov.br): todas as seções de um dia.
+"""Coleta do Diário Oficial da União: todas as seções de um dia.
 
-A página ``leiturajornal`` de cada seção traz os atos num JSON embutido
-(``<script id="params">``): título, tipo do ato, órgão, trecho do texto e o
-endereço do ato. O texto completo fica em ``/web/dou/-/<urlTitle>``.
+Duas fontes, com o mesmo formato de saída:
+
+* **INLABS** (``inlabs.in.gov.br``), o serviço oficial de dados abertos da
+  Imprensa Nacional: um ``.zip`` de XMLs por seção e dia, com o texto completo.
+  Exige cadastro gratuito; usado quando ``INLABS_EMAIL`` e ``INLABS_SENHA``
+  estão no ambiente. Guarda os últimos 4 meses.
+* **leiturajornal** (``www.in.gov.br``): a página de leitura de cada seção
+  traz os atos num JSON embutido. Sem cadastro, mas o site bloqueia alguns
+  servidores (ex.: data centers fora do Brasil).
 """
 
 import html
+import io
 import json
 import logging
+import os
+import xml.etree.ElementTree as ET
+import zipfile
 import random
 import re
 import time
@@ -79,8 +89,129 @@ def fetch_section(day: date, section: str) -> List[Dict]:
     return out
 
 
+# ---------------- INLABS ----------------
+
+INLABS = "https://inlabs.in.gov.br"
+INLABS_SECTIONS = {"do1": "DO1", "do2": "DO2", "do3": "DO3", "do1e": "DO1E", "do2e": "DO2E", "do3e": "DO3E"}
+
+
+def inlabs_enabled() -> bool:
+    return bool(os.getenv("INLABS_EMAIL") and os.getenv("INLABS_SENHA"))
+
+
+def inlabs_session() -> requests.Session:
+    """Login como no script oficial (github.com/Imprensa-Nacional/inlabs)."""
+    s = requests.Session()
+    s.headers.update(UA)
+    last = None
+    for i in range(3):
+        try:
+            r = s.post(
+                f"{INLABS}/logar.php",
+                data={"email": os.getenv("INLABS_EMAIL"), "password": os.getenv("INLABS_SENHA")},
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                timeout=60,
+            )
+            if s.cookies.get("inlabs_session_cookie"):
+                return s
+            last = f"HTTP {r.status_code}, sem cookie de sessão"
+            if "Manutenção" in r.text:
+                last = "o INLABS está em manutenção programada"
+        except requests.RequestException as e:
+            last = e
+        time.sleep(3 * (i + 1))
+    raise RuntimeError(f"login no INLABS falhou: {last}. Confira INLABS_EMAIL e INLABS_SENHA no .env")
+
+
+def inlabs_zip(s: requests.Session, day: date, section: str) -> Optional[bytes]:
+    d = day.isoformat()
+    name = f"{d}-{INLABS_SECTIONS[section]}.zip"
+    r = s.get(
+        f"{INLABS}/index.php",
+        params={"p": d, "dl": name},
+        headers={"Cookie": "inlabs_session_cookie=" + s.cookies.get("inlabs_session_cookie", ""), "origem": "736372697074"},
+        timeout=180,
+    )
+    if r.status_code == 404:
+        return None  # seção sem edição nesse dia
+    if r.status_code != 200 or not r.content.startswith(b"PK"):
+        raise RuntimeError(f"INLABS devolveu HTTP {r.status_code} ({len(r.content)} bytes) para {name}")
+    return r.content
+
+
+def parse_inlabs_xml(raw: bytes, day: date, section: str) -> Optional[Dict]:
+    """Um XML do INLABS = um ato: atributos em <article>, texto em <body>."""
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError:
+        return None
+    art = root if root.tag == "article" else root.find(".//article")
+    if art is None:
+        return None
+    a = art.attrib
+    body = art.find("body")
+
+    def part(tag: str) -> str:
+        el = body.find(tag) if body is not None else None
+        return clean(el.text or "") if el is not None else ""
+
+    texto = part("Texto")
+    titulo = part("Identifica") or part("Titulo") or a.get("name", "")
+    ident = a.get("idMateria") or a.get("id") or a.get("name", "")
+    return {
+        "id": f"dou-{ident}",
+        "data": day.isoformat(),
+        "secao": section,
+        "tipo": a.get("artType", ""),
+        "titulo": titulo,
+        "orgao": a.get("artCategory", ""),
+        "trecho": (part("Ementa") + " " + texto).strip()[:400],
+        "texto": texto[:6000],
+        "pagina": a.get("numberPage", ""),
+        "edicao": a.get("editionNumber", ""),
+        "url": a.get("pdfPage", ""),
+    }
+
+
+def parse_inlabs_zip(content: bytes, day: date, section: str) -> List[Dict]:
+    out = []
+    with zipfile.ZipFile(io.BytesIO(content)) as z:
+        for name in z.namelist():
+            if name.lower().endswith(".xml"):
+                act = parse_inlabs_xml(z.read(name), day, section)
+                if act:
+                    out.append(act)
+    return out
+
+
+def fetch_day_inlabs(day: date, sections: Iterable[str] = SECTIONS) -> List[Dict]:
+    s = inlabs_session()
+    acts, seen = [], set()
+    for sec in sections:
+        content = inlabs_zip(s, day, sec)
+        items = parse_inlabs_zip(content, day, sec) if content else []
+        for a in items:
+            if a["id"] not in seen:
+                seen.add(a["id"])
+                acts.append(a)
+        logging.info("DOU %s %s (INLABS): %d atos", day, sec, len(items))
+        time.sleep(1)
+    return acts
+
+
+# ---------------- leiturajornal ----------------
+
 def fetch_day(day: date, sections: Iterable[str] = SECTIONS) -> List[Dict]:
-    """Tudo o que saiu no DOU num dia (seções normais e extras)."""
+    """Tudo o que saiu no DOU num dia (seções normais e extras).
+
+    Usa o INLABS quando há credenciais; senão, a página de leitura.
+    """
+    if inlabs_enabled():
+        return fetch_day_inlabs(day, sections)
+    return fetch_day_leitura(day, sections)
+
+
+def fetch_day_leitura(day: date, sections: Iterable[str] = SECTIONS) -> List[Dict]:
     acts, seen, errors = [], set(), []
     for sec in sections:
         try:
@@ -173,8 +304,8 @@ def sample_cases(n: int, days: int = 10, seed: int = 7, with_text: bool = True) 
     picked = picked[:n]
     cases = []
     for i, a in enumerate(picked, 1):
-        text = ""
-        if with_text:
+        text = a.get("texto", "") if with_text else ""
+        if with_text and not text:
             try:
                 text = full_text(a["url"])
             except RuntimeError as e:
