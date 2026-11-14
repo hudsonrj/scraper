@@ -9,8 +9,9 @@ Variáveis de ambiente:
     BIG_PROVIDER / BIG_MODEL / BIG_BASE_URL / BIG_API_KEY / BIG_EFFORT   modelo congelado
     EDITOR_PROVIDER / EDITOR_MODEL / EDITOR_BASE_URL / ...              editor pequeno
 
-``*_PROVIDER`` é ``anthropic`` ou ``openai``. Sem ele: ``*_BASE_URL`` definido
-→ openai (Ollama e afins); senão ``ANTHROPIC_API_KEY`` presente → anthropic;
+``*_PROVIDER`` é ``anthropic``, ``deepseek`` ou ``openai``. Sem ele:
+``*_BASE_URL`` definido → openai (Ollama, Groq e afins); senão
+``ANTHROPIC_API_KEY`` → anthropic; senão ``DEEPSEEK_API_KEY`` → deepseek;
 senão openai com ``OPENAI_API_KEY``.
 """
 
@@ -91,6 +92,7 @@ class OpenAICompatible:
         cache: Optional[DiskCache] = None,
         counter: Optional[CallCounter] = None,
         timeout: float = 120.0,
+        effort: Optional[str] = None,
     ):
         from openai import OpenAI  # import tardio: os testes não precisam do pacote
 
@@ -104,13 +106,14 @@ class OpenAICompatible:
             )
         self.client = OpenAI(api_key=key, base_url=base_url, timeout=timeout, max_retries=8)
         self.name = model
+        self.effort = effort
         self.base_url = base_url or "openai"
         self.cache = cache or DiskCache(None)
         self.counter = counter or CallCounter()
 
     def complete(self, prompt: str, temperature: float = 0.0, json_mode: bool = True, prefix: str = "") -> str:
         prompt = prefix + prompt
-        k = DiskCache.key(self.base_url, self.name, temperature, json_mode, prompt)
+        k = DiskCache.key(self.base_url, self.name, temperature, json_mode, self.effort, prompt)
         hit = self.cache.get(k)
         if hit is not None:
             self.counter.tick(cached=True)
@@ -119,6 +122,8 @@ class OpenAICompatible:
         kwargs = {}
         if json_mode:
             kwargs["response_format"] = {"type": "json_object"}
+        if self.effort:
+            kwargs["reasoning_effort"] = self.effort
         try:
             resp = self.client.chat.completions.create(
                 model=self.name,
@@ -129,12 +134,14 @@ class OpenAICompatible:
         except Exception as e:
             # alguns provedores (ex.: Groq) recusam a resposta quando o JSON não valida;
             # tenta de novo sem o modo estrito e deixa o parser extrair o JSON do texto
-            if not kwargs or "json_validate_failed" not in str(e):
+            if "response_format" not in kwargs or "json_validate_failed" not in str(e):
                 raise
+            kwargs.pop("response_format")
             resp = self.client.chat.completions.create(
                 model=self.name,
                 temperature=temperature,
                 messages=[{"role": "user", "content": prompt + "\n\nResponda apenas com o JSON."}],
+                **kwargs,
             )
         out = resp.choices[0].message.content or ""
         self.cache.put(k, out)
@@ -218,6 +225,9 @@ DEFAULTS = {
     ("big", "anthropic"): "claude-opus-5-5",
     ("editor", "anthropic"): "claude-haiku-5-5",
     ("big", "openai"): "gpt-4o-mini",
+    ("big", "deepseek"): "deepseek-flash",
+    ("editor", "deepseek"): "deepseek-flash",
+    ("suggest", "deepseek"): "deepseek-v4-pro",
     # quem sugere rótulos para a prova: mais forte que o modelo congelado
     ("suggest", "anthropic"): "claude-opus-5-5",
     ("suggest", "openai"): "gpt-4o",
@@ -234,7 +244,12 @@ def provider_for(role: str) -> str:
         return "openai"
     if os.getenv(f"{p}_API_KEY", "").startswith("sk-ant-") or os.getenv("ANTHROPIC_API_KEY"):
         return "anthropic"
+    if os.getenv("DEEPSEEK_API_KEY"):
+        return "deepseek"
     return "openai"
+
+
+DEEPSEEK_URL = "https://api.deepseek.com"
 
 
 def from_env(role: str, cache: DiskCache, counter: CallCounter, default_model: Optional[str] = None):
@@ -250,10 +265,21 @@ def from_env(role: str, cache: DiskCache, counter: CallCounter, default_model: O
             cache=cache,
             counter=counter,
         )
+    if provider == "deepseek":
+        return OpenAICompatible(
+            model=model,
+            base_url=os.getenv(f"{p}_BASE_URL") or DEEPSEEK_URL,
+            api_key=os.getenv(f"{p}_API_KEY") or os.getenv("DEEPSEEK_API_KEY"),
+            cache=cache,
+            counter=counter,
+            # classificar não precisa de raciocínio longo; sugerir e editar, um pouco mais
+            effort=os.getenv(f"{p}_EFFORT", "low" if role == "big" else "high"),
+        )
     return OpenAICompatible(
         model=model,
         base_url=os.getenv(f"{p}_BASE_URL") or None,
         api_key=os.getenv(f"{p}_API_KEY") or None,
         cache=cache,
         counter=counter,
+        effort=os.getenv(f"{p}_EFFORT") or None,
     )

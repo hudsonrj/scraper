@@ -56,6 +56,7 @@ HARNESS_DIR=$DATA_DIR
 PAINEL_USUARIO=admin
 PAINEL_SENHA=$SENHA
 # Chaves: o instalador copia de outras aplicações do servidor quando encontra.
+DEEPSEEK_API_KEY=
 OPENAI_API_KEY=
 ANTHROPIC_API_KEY=
 GROQ_API_KEY=
@@ -87,7 +88,7 @@ PY
   fi
 }
 found_any=0
-for KEY in OPENAI_API_KEY ANTHROPIC_API_KEY GROQ_API_KEY; do
+for KEY in DEEPSEEK_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY GROQ_API_KEY; do
   if [ -n "$(env_get "$KEY" "$ENV")" ]; then echo "$KEY: já definida no .env do newsloop"; found_any=1; continue; fi
   for f in /root/apps/*/.env /root/apps/*/*/.env /root/*/.env /opt/*/.env /srv/*/.env /var/www/*/.env /etc/environment; do
     [ -f "$f" ] || continue
@@ -131,8 +132,11 @@ if [ -z "$(env_get EDITOR_BASE_URL "$ENV")" ] && [ -n "$(env_get GROQ_API_KEY "$
 fi
 # Os modelos padrão dependem da chave: Claude (claude-opus-5-5 congelado, claude-haiku-5-5 editor)
 # ou OpenAI (gpt-4o-mini). Remove o padrão antigo da OpenAI se só existe chave da Anthropic.
-if [ -n "$(env_get ANTHROPIC_API_KEY "$ENV")" ] && [ -z "$(env_get OPENAI_API_KEY "$ENV")" ]; then
-  sed -i -E '/^(BIG|EDITOR)_MODEL=gpt-/d' "$ENV"
+# Com chave da Anthropic ou da DeepSeek, quem escolhe o modelo é o provedor: tira o padrão antigo da OpenAI.
+if [ -n "$(env_get ANTHROPIC_API_KEY "$ENV")$(env_get DEEPSEEK_API_KEY "$ENV")" ]; then
+  sed -i -E '/^(BIG|EDITOR|SUGGEST)_MODEL=gpt-/d' "$ENV"
+  [ -n "$(env_get DEEPSEEK_API_KEY "$ENV")" ] && [ -z "$(env_get ANTHROPIC_API_KEY "$ENV")" ] && \
+    echo "Modelos: DeepSeek (deepseek-flash congelado e editor, deepseek-v4-pro sugere rótulos)"
 fi
 
 say "Porta interna"
@@ -357,10 +361,10 @@ say "Pronto"
 echo "Site:     https://$DOMAIN"
 echo "Painel:   https://$DOMAIN/painel"
 echo "Revisão:  https://$DOMAIN/revisar  (usuário e senha em $ENV)"
-if [ -n "$(env_get OPENAI_API_KEY "$ENV")$(env_get ANTHROPIC_API_KEY "$ENV")" ]; then
+if [ -n "$(env_get OPENAI_API_KEY "$ENV")$(env_get ANTHROPIC_API_KEY "$ENV")$(env_get DEEPSEEK_API_KEY "$ENV")" ]; then
   echo "Loop:     $APP_DIR/deploy/run-loop.sh --rounds 2"
 else
-  echo "Loop:     preencha OPENAI_API_KEY ou ANTHROPIC_API_KEY em $ENV e rode $APP_DIR/deploy/run-loop.sh --rounds 2"
+  echo "Loop:     preencha DEEPSEEK_API_KEY (ou OPENAI/ANTHROPIC) em $ENV e rode $APP_DIR/deploy/run-loop.sh --rounds 2"
 fi
 echo "DOU:      coleta diária ligada (newsloop-dou.timer). Para coletar agora: $APP_DIR/deploy/dou-ingest.sh"
 echo "Prova:    para trocar a prova pelo DOU: cd $APP_DIR && .venv/bin/python src/run_harness_loop.py build --replace --n 200"
