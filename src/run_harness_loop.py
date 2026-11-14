@@ -123,9 +123,19 @@ def cmd_dou_ingest(args):
     from harness_loop.dou import fetch_day, parse_day
 
     day = parse_day(args.date)
-    acts = fetch_day(day)
-    os.makedirs(DOU_DIR, exist_ok=True)
     path = os.path.join(DOU_DIR, f"{day.isoformat()}.jsonl")
+    try:
+        acts = fetch_day(day)
+    except RuntimeError as e:
+        print(f"DOU {day.isoformat()}: falhou: {e}")
+        return 1
+    if not acts:
+        # dia sem publicação (fim de semana, feriado): não grava arquivo vazio
+        if os.path.exists(path) and os.path.getsize(path) == 0:
+            os.remove(path)
+        print(f"DOU {day.isoformat()}: nenhum ato publicado")
+        return 2
+    os.makedirs(DOU_DIR, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         for a in acts:
             f.write(json.dumps(a, ensure_ascii=False) + "\n")

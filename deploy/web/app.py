@@ -43,6 +43,8 @@ def list_dou_days(limit=15):
     days = sorted((f[:-6] for f in os.listdir(DOU_DIR) if re.fullmatch(r"\d{4}-\d{2}-\d{2}\.jsonl", f)), reverse=True)
     for d in days[:limit]:
         acts = [json.loads(x) for x in open(os.path.join(DOU_DIR, d + ".jsonl"), encoding="utf-8") if x.strip()]
+        if not acts:
+            continue
         secs = Counter(a["secao"].rstrip("e") for a in acts)
         temas, classif = Counter(), 0
         tpath = os.path.join(DOU_DIR, d + ".temas.jsonl")

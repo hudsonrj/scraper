@@ -237,3 +237,14 @@ def test_unlabeled_cases_are_not_scored():
     rep = report(cases, TAX)
     assert not any("fora da árvore" in c.text for c in rep.checks)
     assert any("sem tema" in c.text for c in rep.checks)
+
+
+def test_dou_blocked_page_is_reported(monkeypatch):
+    from datetime import date
+
+    from src.harness_loop import dou
+
+    monkeypatch.setattr(dou, "_get", lambda url, params=None, tries=4: "<html><title>Acesso negado</title></html>")
+    monkeypatch.setattr(dou.time, "sleep", lambda s: None)
+    with pytest.raises(RuntimeError, match="Acesso negado"):
+        dou.fetch_day(date(2026, 11, 13))

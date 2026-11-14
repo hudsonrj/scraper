@@ -57,7 +57,11 @@ def fetch_section(day: date, section: str) -> List[Dict]:
     page = _get(f"{BASE}/leiturajornal", {"data": day.strftime("%d-%m-%Y"), "secao": section})
     m = _PARAMS.search(page)
     if not m:
-        return []
+        title = re.search(r"<title>(.*?)</title>", page, re.S)
+        raise RuntimeError(
+            f"a página não trouxe os atos ({len(page)} bytes, título: "
+            f"{clean(title.group(1)) if title else 'sem título'!r}); o in.gov.br pode estar bloqueando este servidor"
+        )
     out = []
     for a in json.loads(m.group(1)).get("jsonArray", []):
         out.append({
@@ -77,12 +81,13 @@ def fetch_section(day: date, section: str) -> List[Dict]:
 
 def fetch_day(day: date, sections: Iterable[str] = SECTIONS) -> List[Dict]:
     """Tudo o que saiu no DOU num dia (seções normais e extras)."""
-    acts, seen = [], set()
+    acts, seen, errors = [], set(), []
     for sec in sections:
         try:
             items = fetch_section(day, sec)
         except RuntimeError as e:
             logging.warning("%s %s: %s", day, sec, e)
+            errors.append(f"{sec}: {e}")
             continue
         for a in items:
             if a["id"] not in seen:
@@ -90,6 +95,8 @@ def fetch_day(day: date, sections: Iterable[str] = SECTIONS) -> List[Dict]:
                 acts.append(a)
         logging.info("DOU %s %s: %d atos", day, sec, len(items))
         time.sleep(0.5)
+    if not acts and errors:
+        raise RuntimeError("nenhuma seção do DOU veio: " + errors[0])
     return acts
 
 
