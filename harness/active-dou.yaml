@@ -1,0 +1,23 @@
+# Harness v0 para atos do Diário Oficial da União, escrito à mão.
+# O loop só pode mudar "instrucoes", "regras" e "exemplos".
+# "contrato" e "modelo" são travados: edições nessas partes são recusadas.
+instrucoes: |
+  Você classifica atos publicados no Diário Oficial da União (portarias, decretos,
+  resoluções, despachos, extratos de contrato, avisos de licitação, nomeações etc.)
+  em uma árvore temática de três níveis. Identifique os temas de terceiro nível
+  (códigos com três partes, como 16.04.01) que melhor descrevem o ASSUNTO do ato.
+  O primeiro tema da lista é o tema principal.
+contrato: |
+  Responda só com JSON, sem texto fora dele, no formato:
+  {"temas": ["XX.YY.ZZ", "XX.YY.ZZ", "XX.YY.ZZ"]}
+  - De 1 a 3 códigos, todos de terceiro nível e existentes na árvore.
+  - O primeiro código é o tema principal.
+regras:
+  - O tema principal é o assunto do ato, não o tipo de ato nem o órgão que o publicou.
+  - Em contratos, licitações e aditivos, o assunto é o objeto contratado.
+  - Em nomeações, exonerações e outros atos de pessoal, o assunto é a área de atuação do cargo.
+exemplos: []
+modelo:
+  temperatura: 0
+versao: 0
+origem: escrito à mão (DOU)

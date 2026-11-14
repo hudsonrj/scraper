@@ -203,3 +203,37 @@ def test_loop_climbs_and_rejects_unsafe_edits(tmp_path):
     for f in ("v0.yaml", "v3.yaml", "final.yaml", "history.jsonl", "report.md"):
         assert (tmp_path / f).exists()
     assert Harness.load(str(tmp_path / "final.yaml")).regras == res.final.regras
+
+
+# ---------------- Diário Oficial ----------------
+
+def test_dou_parsing_without_network(monkeypatch):
+    from src.harness_loop import dou
+
+    page = '''<html><script id="params" type="application/json">
+    {"jsonArray": [{"pubName": "DO1", "urlTitle": "portaria-n-1-de-1-de-novembro-de-2026-744000001",
+      "title": "PORTARIA Nº 1, DE 1º DE NOVEMBRO DE 2026", "artType": "Portaria",
+      "hierarchyStr": "Ministério da Saúde/Secretaria de Vigilância/Departamento X",
+      "content": "Dispõe sobre a &quot;vacinação&quot; contra a gripe.", "numberPage": "10", "editionNumber": "214"}]}
+    </script></html>'''
+    ato = '<div class="texto-dou"><p>Texto do ato.</p><p>Este conteúdo não substitui o publicado na versão certificada.</p></div></div>'
+    monkeypatch.setattr(dou, "_get", lambda url, params=None, tries=4: ato if "/web/dou/" in url else page)
+
+    from datetime import date
+    acts = dou.fetch_section(date(2026, 11, 13), "do1")
+    assert acts[0]["id"] == "dou-744000001"
+    assert acts[0]["trecho"] == 'Dispõe sobre a "vacinação" contra a gripe.'
+    assert dou.full_text(acts[0]["url"]) == "Texto do ato."
+
+    c = dou.to_case(acts[0])
+    assert c.status == "sem_rotulo" and c.expected == ""
+    assert c.agency == "Ministério da Saúde/Secretaria de Vigilância"
+    assert c.category == "Seção 1 · Portaria"
+
+
+def test_unlabeled_cases_are_not_scored():
+    cases = make_cases()
+    cases[0].status, cases[0].expected = "sem_rotulo", ""
+    rep = report(cases, TAX)
+    assert not any("fora da árvore" in c.text for c in rep.checks)
+    assert any("sem tema" in c.text for c in rep.checks)

@@ -10,6 +10,7 @@ Roda com gunicorn atrás do Caddy (ver deploy/install.sh). Variáveis (.env):
 import hmac
 import json
 import os
+import re
 import sys
 import threading
 from functools import wraps
@@ -30,6 +31,33 @@ HDIR = os.getenv("HARNESS_DIR") or os.path.join(ROOT, "harness")
 CASES = os.path.join(HDIR, "exam", "cases.jsonl")
 ACTIVE = os.path.join(HDIR, "active.yaml")
 RUNS = os.path.join(HDIR, "runs")
+DOU_DIR = os.path.join(HDIR, "dou")
+
+
+def list_dou_days(limit=15):
+    from collections import Counter
+
+    out = []
+    if not os.path.isdir(DOU_DIR):
+        return out
+    days = sorted((f[:-6] for f in os.listdir(DOU_DIR) if re.fullmatch(r"\d{4}-\d{2}-\d{2}\.jsonl", f)), reverse=True)
+    for d in days[:limit]:
+        acts = [json.loads(x) for x in open(os.path.join(DOU_DIR, d + ".jsonl"), encoding="utf-8") if x.strip()]
+        secs = Counter(a["secao"].rstrip("e") for a in acts)
+        temas, classif = Counter(), 0
+        tpath = os.path.join(DOU_DIR, d + ".temas.jsonl")
+        if os.path.exists(tpath):
+            for x in open(tpath, encoding="utf-8"):
+                if x.strip():
+                    r = json.loads(x)
+                    if r.get("tema"):
+                        classif += 1
+                        temas[r["tema"].split(".")[0]] += 1
+        out.append({
+            "dia": d, "total": len(acts), "secoes": secs, "classificados": classif,
+            "temas": [(TAX.label(k), n) for k, n in temas.most_common(5)],
+        })
+    return out
 
 app = Flask(__name__, static_folder=os.path.join(HERE, "static"), template_folder=os.path.join(HERE, "templates"))
 TAX = Taxonomy.load()
@@ -81,7 +109,8 @@ def painel():
     rep_prov = report(cases, TAX, allow_provisional=True)
     active = open(ACTIVE, encoding="utf-8").read() if os.path.exists(ACTIVE) else "(sem harness ativo)"
     h = Harness.load(ACTIVE) if os.path.exists(ACTIVE) else None
-    return render_template("painel.html", rep=rep, rep_prov=rep_prov, active=active, h=h, runs=list_runs())
+    return render_template("painel.html", rep=rep, rep_prov=rep_prov, active=active, h=h, runs=list_runs(),
+                           dou=list_dou_days())
 
 
 @app.get("/execucoes/<name>")
@@ -99,12 +128,14 @@ def execucao(name):
 def revisar():
     cases = load_cases(CASES)
     skip = set(request.args.getlist("pular"))
-    todo = [c for c in cases if c.status == "provisorio" and c.id not in skip]
+    todo = [c for c in cases if c.status in ("provisorio", "sem_rotulo") and c.id not in skip]
     done = sum(1 for c in cases if c.status == "humano")
     c = todo[0] if todo else None
     return render_template(
         "revisar.html", c=c, left=len(todo), done=done, tax=TAX, codes=ALL_CODES,
-        skip=list(skip), cogfy=TAX.label(c.expected) if c else "",
+        skip=list(skip),
+        sugestao=TAX.label(c.expected) if c and c.status == "provisorio" else "",
+        fonte=(c.note or "sugestão") if c else "",
     )
 
 
@@ -121,6 +152,8 @@ def revisar_post(case_id):
         if c is None:
             abort(404)
         if action == "aceitar":
+            if c.status != "provisorio":
+                return Response("Este ato não tem sugestão: escolha o tema na lista.", 400)
             c.status = "humano"
         elif action == "descartar":
             c.status, c.note = "descartado", "descartado na revisão"
@@ -128,7 +161,7 @@ def revisar_post(case_id):
             code = (request.form.get("codigo") or "").split(" ")[0].strip()
             if not TAX.exists(code):
                 return Response(f"Código {code!r} não existe na árvore. Volte e escolha da lista.", 400)
-            c.note = f"Cogfy dizia {c.expected}"
+            c.note = f"sugestão era {c.expected}" if c.expected else "rotulado do zero"
             c.expected, c.status = code, "humano"
         else:
             abort(400)

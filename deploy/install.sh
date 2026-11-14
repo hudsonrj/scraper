@@ -210,10 +210,52 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 EOT
-chmod +x "$APP_DIR/deploy/run-loop.sh"
+# Coleta diária do DOU: grátis (só lê o in.gov.br). Duas vezes ao dia por causa das edições extras.
+cat > /etc/systemd/system/newsloop-dou.service <<EOT
+[Unit]
+Description=newsloop: coleta tudo o que saiu no Diário Oficial hoje
+
+[Service]
+Type=oneshot
+ExecStart=$APP_DIR/deploy/dou-ingest.sh
+EOT
+cat > /etc/systemd/system/newsloop-dou.timer <<EOT
+[Unit]
+Description=newsloop: coleta do DOU às 09:47 e 21:47
+
+[Timer]
+OnCalendar=*-*-* 09:47,21:47
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOT
+# Classificação diária: usa API paga, então fica DESLIGADA até você ativar.
+cat > /etc/systemd/system/newsloop-dou-classify.service <<EOT
+[Unit]
+Description=newsloop: classifica os atos do DOU de hoje com o harness ativo
+After=newsloop-dou.service
+
+[Service]
+Type=oneshot
+ExecStart=$APP_DIR/deploy/dou-classify.sh --workers 4 --max-calls 8000
+EOT
+cat > /etc/systemd/system/newsloop-dou-classify.timer <<EOT
+[Unit]
+Description=newsloop: classificação diária do DOU (desligada até você ativar)
+
+[Timer]
+OnCalendar=*-*-* 22:17
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOT
+chmod +x "$APP_DIR/deploy/run-loop.sh" "$APP_DIR"/deploy/dou-*.sh
 systemctl daemon-reload
 systemctl enable -q --now newsloop-web
 systemctl restart newsloop-web
+systemctl enable -q --now newsloop-dou.timer
 sleep 3
 curl -fsS "http://127.0.0.1:$PORT/saude" >/dev/null && echo "app respondendo em 127.0.0.1:$PORT" || { journalctl -u newsloop-web -n 30 --no-pager; exit 1; }
 if [ -n "$EXTRA_BIND" ] && command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
@@ -320,4 +362,7 @@ if [ -n "$(env_get OPENAI_API_KEY "$ENV")$(env_get ANTHROPIC_API_KEY "$ENV")" ];
 else
   echo "Loop:     preencha OPENAI_API_KEY ou ANTHROPIC_API_KEY em $ENV e rode $APP_DIR/deploy/run-loop.sh --rounds 2"
 fi
+echo "DOU:      coleta diária ligada (newsloop-dou.timer). Para coletar agora: $APP_DIR/deploy/dou-ingest.sh"
+echo "Prova:    para trocar a prova pelo DOU: cd $APP_DIR && .venv/bin/python src/run_harness_loop.py build --replace --n 200"
 echo "Semanal:  systemctl enable --now newsloop-loop.timer"
+echo "Classificar o DOU todo dia (API paga): systemctl enable --now newsloop-dou-classify.timer"

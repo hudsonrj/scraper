@@ -79,7 +79,7 @@ class Harness:
         """Parte idêntica em toda chamada (árvore temática): vai para o cache de prompt."""
         return "## Árvore temática\n\n" + tax.render() + "\n"
 
-    def render(self, title: str, category: str, content: str) -> str:
+    def render(self, title: str, category: str, content: str, orgao: str = "") -> str:
         """Parte que muda com o harness e com a notícia."""
         parts = [self.instrucoes.strip(), ""]
         if self.regras:
@@ -97,7 +97,8 @@ class Harness:
             "## Notícia",
             "",
             f"Título: {title}",
-            f"Categoria no site: {category or '—'}",
+            f"Categoria: {category or '—'}",
+            *([f"Órgão: {orgao}"] if orgao else []),
             f"Conteúdo: {content}",
         ]
         return "\n".join(parts)

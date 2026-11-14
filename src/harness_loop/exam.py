@@ -5,11 +5,12 @@ Cada linha de ``cases.jsonl`` é um caso::
     {"id": "...", "title": "...", "category": "...", "content": "...",
      "expected": "05.02.01",          # código esperado (nível 1, 2 ou 3)
      "split": "tarefa" | "heldout",   # fixado na criação, nunca muda
-     "status": "humano" | "provisorio" | "descartado",
-     "source": "cogfy" | "manual" | "tests", "note": "..."}
+     "status": "humano" | "provisorio" | "sem_rotulo" | "descartado",
+     "source": "dou" | "cogfy" | "manual" | "tests", "note": "..."}
 
-``status = provisorio`` quer dizer que o rótulo veio do Cogfy e ainda não foi
-revisado por uma pessoa. A prova só vale tanto quanto os rótulos ``humano``.
+``provisorio``: o rótulo é uma sugestão (do Cogfy ou de um modelo mais forte)
+que ninguém revisou. ``sem_rotulo``: falta o tema. A prova só vale tanto
+quanto os rótulos ``humano``.
 """
 
 import hashlib
@@ -22,7 +23,7 @@ from typing import Iterable, List, Optional
 from .taxonomy import Taxonomy, level, prefix
 
 SPLITS = ("tarefa", "heldout")
-STATUSES = ("humano", "provisorio", "descartado")
+STATUSES = ("humano", "provisorio", "sem_rotulo", "descartado")
 
 
 @dataclass
@@ -124,7 +125,7 @@ def report(
         heldout=len(held),
     )
 
-    bad = [c.id for c in cases if c.status != "descartado" and not tax.exists(c.expected)]
+    bad = [c.id for c in cases if c.status in ("humano", "provisorio") and not tax.exists(c.expected)]
     r.checks.append(
         Check(
             not bad,
@@ -144,18 +145,20 @@ def report(
         r.checks.append(
             Check(False, "BLOQUEIA: são necessários pelo menos 10 casos em cada lado (tarefa e held-out)")
         )
+    if st["sem_rotulo"]:
+        r.checks.append(Check(True, f"{st['sem_rotulo']} caso(s) ainda sem tema: rotule em /revisar"))
     if not allow_provisional and st["provisorio"]:
         r.checks.append(
             Check(
                 True,
-                f"{st['provisorio']} caso(s) provisórios ignorados até alguém revisar (comando review)",
+                f"{st['provisorio']} caso(s) com tema sugerido, ignorados até alguém revisar em /revisar",
             )
         )
     if allow_provisional and st["provisorio"]:
         r.checks.append(
             Check(
                 False,
-                f"{st['provisorio']} caso(s) usam o rótulo do Cogfy sem revisão: o loop vai aprender a imitar o Cogfy, inclusive os erros dele",
+                f"{st['provisorio']} caso(s) usam rótulo sugerido sem revisão: o loop vai aprender a imitar quem sugeriu, inclusive os erros",
             )
         )
     l1 = Counter(prefix(c.expected, 1) for c in held)

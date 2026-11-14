@@ -218,6 +218,9 @@ DEFAULTS = {
     ("big", "anthropic"): "claude-opus-5-5",
     ("editor", "anthropic"): "claude-haiku-5-5",
     ("big", "openai"): "gpt-4o-mini",
+    # quem sugere rótulos para a prova: mais forte que o modelo congelado
+    ("suggest", "anthropic"): "claude-opus-5-5",
+    ("suggest", "openai"): "gpt-4o",
     ("editor", "openai"): "gpt-4o-mini",
 }
 
@@ -242,8 +245,8 @@ def from_env(role: str, cache: DiskCache, counter: CallCounter, default_model: O
         return AnthropicModel(
             model=model,
             api_key=os.getenv(f"{p}_API_KEY") or None,
-            effort=os.getenv(f"{p}_EFFORT", "low" if role == "big" else "medium"),
-            max_tokens=4000 if role == "big" else 16000,
+            effort=os.getenv(f"{p}_EFFORT", {"big": "low", "suggest": "high"}.get(role, "medium")),
+            max_tokens=16000 if role == "editor" else 8000,
             cache=cache,
             counter=counter,
         )

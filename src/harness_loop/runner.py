@@ -93,7 +93,7 @@ def evaluate(
     tree = Harness.render_prefix(tax)
 
     def one(c: Case) -> CaseResult:
-        prompt = h.render(c.title, c.category, (c.content or "")[:CONTENT_CHARS])
+        prompt = h.render(c.title, c.category, (c.content or "")[:CONTENT_CHARS], c.agency)
         try:
             raw = model.complete(prompt, temperature=temperature, json_mode=True, prefix=tree)
         except Exception as e:

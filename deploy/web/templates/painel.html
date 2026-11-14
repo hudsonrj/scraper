@@ -2,19 +2,31 @@
 {% block title %}Painel do Newsloop{% endblock %}
 {% block body %}
 <h1>Painel do loop</h1>
-<p class="lead">O modelo congelado classifica notícias do gov.br na árvore de 3 níveis. O loop reescreve o harness; o humano escreve a prova.</p>
+<p class="lead">O modelo congelado classifica os atos do Diário Oficial da União na árvore de 3 níveis. O loop reescreve o harness; o humano escreve a prova.</p>
+
+<h2>Diário Oficial</h2>
+{% if dou %}
+<div class="tablewrap"><table>
+<thead><tr><th>dia</th><th>atos</th><th>seção 1</th><th>seção 2</th><th>seção 3</th><th>classificados</th><th>temas mais frequentes</th></tr></thead>
+<tbody>
+{% for d in dou %}<tr><td>{{ d.dia }}</td><td>{{ d.total }}</td><td>{{ d.secoes.get('do1', 0) }}</td><td>{{ d.secoes.get('do2', 0) }}</td><td>{{ d.secoes.get('do3', 0) }}</td>
+<td>{{ d.classificados }}</td><td>{% for t, n in d.temas %}{{ t }} ({{ n }}){% if not loop.last %} · {% endif %}{% endfor %}{% if not d.temas %}—{% endif %}</td></tr>{% endfor %}
+</tbody></table></div>
+{% else %}
+<p class="meta">Nenhum dia coletado ainda. A coleta roda sozinha todo dia às 09:47 e às 21:47. Para coletar agora, no servidor: <code>/root/apps/harnessend/deploy/dou-ingest.sh</code></p>
+{% endif %}
 
 <h2>A prova</h2>
 <div class="stats">
   <div><span class="v">{{ rep.humano }}</span><span class="l">revisados por humano</span></div>
-  <div><span class="v">{{ rep.provisorio }}</span><span class="l">provisórios (rótulo do Cogfy)</span></div>
+  <div><span class="v">{{ rep.provisorio }}</span><span class="l">com tema sugerido, a revisar</span></div>
   <div><span class="v">{{ rep.tarefa }}</span><span class="l">em uso no lado tarefa</span></div>
   <div><span class="v">{{ rep.heldout }}</span><span class="l">em uso no held-out</span></div>
 </div>
 <ul class="checks">
 {% for c in rep.checks %}<li><span class="pill {{ 'ok' if c.ok else 'warn' }}">{{ '✓' if c.ok else '!' }}</span><span>{{ c.text }}</span></li>{% endfor %}
 </ul>
-<div class="row"><a class="btn" href="/revisar">Revisar rótulos provisórios</a></div>
+<div class="row"><a class="btn" href="/revisar">Revisar a prova</a></div>
 
 <h2>Execuções</h2>
 {% if runs %}
