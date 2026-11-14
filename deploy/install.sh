@@ -234,8 +234,32 @@ add_caddy_block(){
 }
 case "$PROXY" in
   caddy-host)
+    # valida ANTES de mexer: se o arquivo já está quebrado, o erro não é nosso e não recarregamos
+    if ! pre="$(caddy validate --config "$CADDYFILE" --adapter caddyfile 2>&1)"; then
+      if ! grep -qE "^[[:space:]]*(https?://)?${DOMAIN//./\\.}" "$CADDYFILE"; then
+        echo "O Caddyfile já está inválido antes do newsloop mexer nele:"
+        printf '%s\n' "$pre" | grep -E "^Error" | tail -1
+        echo "Não editei nem recarreguei o Caddy (os outros sites continuam no ar com a config atual)."
+        echo "Corrija a linha indicada e rode o instalador de novo. NÃO reinicie o Caddy antes disso."
+        exit 1
+      fi
+    fi
     add_caddy_block "$CADDYFILE"
-    caddy validate --config "$CADDYFILE" --adapter caddyfile >/dev/null
+    if ! out="$(caddy validate --config "$CADDYFILE" --adapter caddyfile 2>&1)"; then
+      err="$(printf '%s\n' "$out" | grep -E "^Error" | tail -1)"
+      line="$(printf '%s' "$err" | grep -oP 'Caddyfile:\K[0-9]+' || true)"
+      start="$(grep -nE "^[[:space:]]*(https?://)?${DOMAIN//./\\.}" "$CADDYFILE" | head -1 | cut -d: -f1)"
+      echo "$err"
+      if [ -n "$line" ] && [ -n "$start" ] && [ "$line" -lt "$start" ]; then
+        echo "O erro está na linha $line, fora do bloco do newsloop (que começa na linha $start)."
+        echo "O Caddyfile já tinha esse problema. O Caddy continua com a config atual: NÃO reinicie."
+        echo "Corrija a linha $line e rode: caddy validate --config $CADDYFILE && systemctl reload caddy"
+      else
+        echo "O bloco do newsloop deixou o arquivo inválido; restaurando a cópia de segurança."
+        cp "$(ls -t "$CADDYFILE".bak.* | head -1)" "$CADDYFILE"
+      fi
+      exit 1
+    fi
     systemctl reload caddy
     ;;
   caddy-docker)
