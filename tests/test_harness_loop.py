@@ -155,6 +155,21 @@ def test_better_uses_task_only_as_tiebreak():
     assert not better(0.4, 1.0, 0.5, 0.0)
 
 
+def test_min_gain_ignores_noise():
+    assert not better(0.51, 0.9, 0.50, 0.5, min_gain=0.02)
+    assert better(0.53, 0.1, 0.50, 0.5, min_gain=0.02)
+
+
+def test_network_errors_are_not_scored_as_model_errors():
+    from src.harness_loop.runner import IncompleteEval
+
+    def boom(prompt):
+        raise ConnectionError("429 rate limit")
+
+    with pytest.raises(IncompleteEval):
+        evaluate(harness0(), FunctionModel(boom), TAX, make_cases()[:3], workers=1)
+
+
 def test_budget_stops_calls():
     counter = CallCounter(limit=1)
     counter.tick(cached=False)

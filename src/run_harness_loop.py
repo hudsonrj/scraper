@@ -16,9 +16,9 @@ Exemplos:
     poetry run python src/run_harness_loop.py review
     poetry run python src/run_harness_loop.py loop --rounds 4 --candidates 8
 
-Modelos (API compatível com a OpenAI, incluindo Ollama):
+Modelos: com ANTHROPIC_API_KEY, o modelo congelado é claude-opus-5-5 e o editor
+claude-haiku-5-5. Com OPENAI_API_KEY, gpt-4o-mini. O editor pode ser local:
 
-    BIG_MODEL=gpt-4o-mini                       # modelo congelado
     EDITOR_MODEL=qwen3:4b EDITOR_BASE_URL=http://localhost:11434/v1
 """
 
@@ -133,8 +133,9 @@ def _models(args):
 
     cache = DiskCache(None if args.no_cache else CACHE)
     counter = CallCounter(limit=args.max_calls)
-    big = from_env("big", cache, counter, "gpt-4o-mini")
-    editor = from_env("editor", cache, counter, "gpt-4o-mini")
+    big = from_env("big", cache, counter)
+    editor = from_env("editor", cache, counter)
+    log.info("modelo congelado: %s · editor: %s", big.name, editor.name)
     return big, editor, counter
 
 
@@ -183,7 +184,7 @@ def cmd_loop(args):
     big, editor, counter = _models(args)
     out = os.path.join(RUNS, datetime.now().strftime("%Y%m%d-%H%M%S"))
     res = run_loop(h0, use, big, editor, tax, rounds=args.rounds, n_candidates=args.candidates,
-                   workers=args.workers, out_dir=out)
+                   workers=args.workers, out_dir=out, min_gain=args.min_gain)
     print()
     with open(os.path.join(out, "report.md"), encoding="utf-8") as f:
         print(f.read())
@@ -229,7 +230,7 @@ def main(argv=None):
     for name in ("eval", "loop"):
         s = sub.add_parser(name)
         s.add_argument("--harness", default=ACTIVE)
-        s.add_argument("--workers", type=int, default=8)
+        s.add_argument("--workers", type=int, default=4, help="chamadas em paralelo; muitas estouram o limite de taxa")
         s.add_argument("--max-calls", type=int, default=None, help="para o loop ao atingir este número de chamadas")
         s.add_argument("--no-cache", action="store_true")
         if name == "eval":
@@ -237,6 +238,8 @@ def main(argv=None):
         else:
             s.add_argument("--rounds", type=int, default=4)
             s.add_argument("--candidates", type=int, default=8)
+            s.add_argument("--min-gain", type=float, default=0.01,
+                           help="ganho mínimo no held-out para aceitar uma edição (0.01 = 1 ponto)")
 
     pr = sub.add_parser("promote", help="promove uma versão aprovada")
     pr.add_argument("path")

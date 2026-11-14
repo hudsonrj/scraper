@@ -54,18 +54,80 @@ if [ ! -f "$ENV" ]; then
 HARNESS_DIR=$DATA_DIR
 PAINEL_USUARIO=admin
 PAINEL_SENHA=$SENHA
-# Para rodar o loop, preencha a chave (ou aponte para o Ollama):
+# Chaves: o instalador copia de outras aplicações do servidor quando encontra.
 OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+GROQ_API_KEY=
 BIG_MODEL=gpt-4o-mini
 EDITOR_MODEL=gpt-4o-mini
-# EDITOR_MODEL=qwen3:4b
-# EDITOR_BASE_URL=http://localhost:11434/v1
 EOT
   chmod 600 "$ENV"
   echo "Senha do /revisar criada: usuário admin, senha $SENHA (guardada em $ENV)"
 else
   grep -q '^HARNESS_DIR=' "$ENV" || echo "HARNESS_DIR=$DATA_DIR" >> "$ENV"
   echo "$ENV já existe; mantido."
+fi
+
+say "Chaves de API reaproveitadas de outras aplicações"
+# Procura cada chave nos .env das outras aplicações do servidor e copia a primeira
+# encontrada. Só mostra de onde veio, nunca o valor.
+env_get(){ grep -E "^(export +)?$1=" "$2" 2>/dev/null | tail -1 | sed -E "s/^(export +)?$1=//; s/^[\"']//; s/[\"'] *$//; s/ +#.*$//"; }
+env_set(){
+  if grep -qE "^$1=" "$ENV"; then
+    python3 - "$ENV" "$1" "$2" <<'PY'
+import sys
+path, key, val = sys.argv[1:]
+lines = open(path).read().splitlines()
+out = [f"{key}={val}" if l.startswith(key + "=") else l for l in lines]
+open(path, "w").write("\n".join(out) + "\n")
+PY
+  else
+    echo "$1=$2" >> "$ENV"
+  fi
+}
+found_any=0
+for KEY in OPENAI_API_KEY ANTHROPIC_API_KEY GROQ_API_KEY; do
+  if [ -n "$(env_get "$KEY" "$ENV")" ]; then echo "$KEY: já definida no .env do newsloop"; found_any=1; continue; fi
+  for f in /root/apps/*/.env /root/apps/*/*/.env /root/*/.env /opt/*/.env /srv/*/.env /var/www/*/.env /etc/environment; do
+    [ -f "$f" ] || continue
+    case "$f" in "$APP_DIR"/*) continue;; esac
+    v="$(env_get "$KEY" "$f")"
+    if [ -n "$v" ]; then env_set "$KEY" "$v"; echo "$KEY: copiada de $f"; found_any=1; break; fi
+  done
+done
+[ "$found_any" = 1 ] || echo "Nenhuma chave encontrada. Preencha ANTHROPIC_API_KEY ou OPENAI_API_KEY em $ENV para rodar o loop."
+chmod 600 "$ENV"
+
+# Editor pequeno local: se o Ollama estiver rodando com um modelo pequeno, usa ele.
+if [ -z "$(env_get EDITOR_BASE_URL "$ENV")" ] && command -v curl >/dev/null; then
+  tags="$(curl -fsS -m 3 http://127.0.0.1:11434/api/tags 2>/dev/null || true)"
+  if [ -n "$tags" ]; then
+    small="$(printf '%s' "$tags" | python3 -c '
+import json,sys,re
+names=[m["name"] for m in json.load(sys.stdin).get("models",[])]
+pick=[n for n in names if re.search(r"(^|[:\-_])(1\.5|3|4|7|8)b", n)]
+pref=[n for n in pick if "qwen" in n] or pick
+print(pref[0] if pref else "")' 2>/dev/null || true)"
+    if [ -n "$small" ]; then
+      env_set EDITOR_BASE_URL "http://127.0.0.1:11434/v1"
+      env_set EDITOR_MODEL "$small"
+      echo "Editor: Ollama local com $small (o modelo pequeno do artigo)"
+    else
+      echo "Ollama encontrado, mas sem modelo pequeno (ex.: ollama pull qwen3:4b); o editor usa a API."
+    fi
+  fi
+fi
+# Sem modelo pequeno local, mas com chave da Groq: editor gpt-oss-20b (~3,6B ativos), na Groq.
+if [ -z "$(env_get EDITOR_BASE_URL "$ENV")" ] && [ -n "$(env_get GROQ_API_KEY "$ENV")" ]; then
+  env_set EDITOR_BASE_URL "https://api.groq.com/openai/v1"
+  env_set EDITOR_API_KEY "$(env_get GROQ_API_KEY "$ENV")"
+  env_set EDITOR_MODEL "openai/gpt-oss-20b"
+  echo "Editor: openai/gpt-oss-20b na Groq"
+fi
+# Os modelos padrão dependem da chave: Claude (claude-opus-5-5 congelado, claude-haiku-5-5 editor)
+# ou OpenAI (gpt-4o-mini). Remove o padrão antigo da OpenAI se só existe chave da Anthropic.
+if [ -n "$(env_get ANTHROPIC_API_KEY "$ENV")" ] && [ -z "$(env_get OPENAI_API_KEY "$ENV")" ]; then
+  sed -i -E '/^(BIG|EDITOR)_MODEL=gpt-/d' "$ENV"
 fi
 
 say "Porta interna"
@@ -101,7 +163,7 @@ Description=newsloop: uma execução do loop de harness
 
 [Service]
 Type=oneshot
-ExecStart=$APP_DIR/deploy/run-loop.sh --rounds 4 --candidates 8 --max-calls 6000
+ExecStart=$APP_DIR/deploy/run-loop.sh --rounds 4 --candidates 8 --workers 4 --max-calls 6000
 EOT
 cat > /etc/systemd/system/newsloop-loop.timer <<EOT
 [Unit]

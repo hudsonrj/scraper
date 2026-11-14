@@ -74,8 +74,14 @@ class Harness:
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
 
     # ---------- prompt ----------
-    def render(self, tax: Taxonomy, title: str, category: str, content: str) -> str:
-        parts = [self.instrucoes.strip(), "", "## Árvore temática", "", tax.render(), ""]
+    @staticmethod
+    def render_prefix(tax: Taxonomy) -> str:
+        """Parte idêntica em toda chamada (árvore temática): vai para o cache de prompt."""
+        return "## Árvore temática\n\n" + tax.render() + "\n"
+
+    def render(self, title: str, category: str, content: str) -> str:
+        """Parte que muda com o harness e com a notícia."""
+        parts = [self.instrucoes.strip(), ""]
         if self.regras:
             parts += ["## Regras", ""]
             parts += [f"{i + 1}. {r}" for i, r in enumerate(self.regras)]

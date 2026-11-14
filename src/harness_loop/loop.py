@@ -22,7 +22,7 @@ from .editor import propose
 from .exam import Case, by_split
 from .harness import Edit, EditRejected, Harness, apply_edit
 from .models import BudgetExceeded, ChatModel
-from .runner import EvalResult, evaluate
+from .runner import EvalResult, IncompleteEval, evaluate
 from .taxonomy import Taxonomy
 
 log = logging.getLogger("harness_loop")
@@ -59,8 +59,15 @@ class RunResult:
     stopped: str = ""
 
 
-def better(cand_h: float, cand_t: float, cur_h: float, cur_t: float, eps: float = 1e-9) -> bool:
-    return cand_h > cur_h + eps or (abs(cand_h - cur_h) <= eps and cand_t > cur_t + eps)
+def better(cand_h: float, cand_t: float, cur_h: float, cur_t: float, min_gain: float = 0.0, eps: float = 1e-9) -> bool:
+    """Sobe o held-out pelo menos ``min_gain``; ou empata no held-out e sobe na tarefa.
+
+    ``min_gain`` protege contra ruído: com 96 perguntas, uma única notícia vale ~1 ponto.
+    """
+    gain = cand_h - cur_h
+    if (gain >= min_gain - eps) if min_gain > 0 else (gain > eps):
+        return True
+    return abs(cand_h - cur_h) <= eps and cand_t > cur_t + eps
 
 
 def run_loop(
@@ -74,6 +81,7 @@ def run_loop(
     workers: int = 8,
     out_dir: Optional[str] = None,
     on_round: Optional[Callable[[Round], None]] = None,
+    min_gain: float = 0.0,
 ) -> RunResult:
     task = by_split(cases, "tarefa")
     held = by_split(cases, "heldout")
@@ -112,7 +120,12 @@ def run_loop(
                     c.rejected = str(err)
                     rd.candidates.append(c)
                     continue
-                he = evaluate(nh, big, tax, held, workers)
+                try:
+                    he = evaluate(nh, big, tax, held, workers)
+                except IncompleteEval as err:
+                    c.rejected = f"medição incompleta: {err}"
+                    rd.candidates.append(c)
+                    continue
                 c.heldout, c.invalid = he.score, he.invalid
                 rd.candidates.append(c)
                 evaluated.append((len(rd.candidates) - 1, nh, he))
@@ -128,18 +141,23 @@ def run_loop(
                     safe.append((idx, nh, he))
 
             # desempate pelo lado tarefa só entre os empatados no topo do held-out
+            best_tuple = None
             if safe:
                 top = max(he.score for _, _, he in safe)
                 tied = [x for x in safe if abs(x[2].score - top) <= 1e-9]
-                best_tuple = None
                 for idx, nh, he in tied:
-                    te = evaluate(nh, big, tax, task, workers)
+                    try:
+                        te = evaluate(nh, big, tax, task, workers)
+                    except IncompleteEval as err:
+                        rd.candidates[idx].rejected = f"medição incompleta no lado tarefa: {err}"
+                        continue
                     rd.candidates[idx].tarefa = te.score
                     if best_tuple is None or te.score > best_tuple[3].score:
                         best_tuple = (idx, nh, he, te)
+            if safe and best_tuple is not None:
                 idx, nh, he, te = best_tuple
                 rd.best = idx
-                if better(he.score, te.score, cur_held.score, cur_task.score):
+                if better(he.score, te.score, cur_held.score, cur_task.score, min_gain):
                     rd.kept = True
                     nh.versao = cur.versao + 1
                     nh.origem = f"loop, rodada {r}: {rd.candidates[idx].edit.label()}"
@@ -162,7 +180,7 @@ def run_loop(
                 on_round(rd)
         else:
             res.stopped = f"{rounds} rodadas concluídas"
-    except BudgetExceeded as e:
+    except (BudgetExceeded, IncompleteEval) as e:
         res.stopped = f"parado: {e}"
         log.warning(res.stopped)
 
@@ -192,7 +210,8 @@ def render_report(res: RunResult, h0: Harness, n_task: int, n_held: int) -> str:
     ]
     for rd in res.rounds:
         if rd.best is None:
-            lines.append(f"| {rd.n} | {rd.failures} | — | — | nenhuma candidata válida |")
+            why = "; ".join(sorted({c.rejected.split(":")[0] for c in rd.candidates if c.rejected})) or "o editor não propôs edições válidas"
+            lines.append(f"| {rd.n} | {rd.failures} | — | — | nenhuma candidata passou ({why}) |")
             continue
         c = rd.candidates[rd.best]
         status = "mantida" if rd.kept else (c.rejected or "não superou a versão atual")
