@@ -221,6 +221,19 @@ if [ -n "$EXTRA_BIND" ] && command -v ufw >/dev/null && ufw status | grep -q "St
 fi
 
 say "Proxy reverso para $DOMAIN"
+# Valida o Caddyfile com as mesmas variáveis de ambiente do serviço do Caddy
+# ({$VAR} no Caddyfile é lido do ambiente; sem elas a validação dá falso erro).
+caddy_validate(){
+  (
+    set +u
+    for f in $(systemctl show caddy -p EnvironmentFiles --value 2>/dev/null | grep -oE '(^|[[:space:]])-?/[^ ]+' | tr -d ' -'); do
+      [ -f "$f" ] && { set -a; . "$f"; set +a; }
+    done
+    envs="$(systemctl show caddy -p Environment --value 2>/dev/null)"
+    [ -n "$envs" ] && eval "export $envs"
+    caddy validate --config "$1" --adapter caddyfile 2>&1
+  )
+}
 add_caddy_block(){
   local f="$1"
   if grep -qE "^[[:space:]]*(https?://)?$DOMAIN([[:space:],{]|$)" "$f"; then
@@ -235,7 +248,7 @@ add_caddy_block(){
 case "$PROXY" in
   caddy-host)
     # valida ANTES de mexer: se o arquivo já está quebrado, o erro não é nosso e não recarregamos
-    if ! pre="$(caddy validate --config "$CADDYFILE" --adapter caddyfile 2>&1)"; then
+    if ! pre="$(caddy_validate "$CADDYFILE")"; then
       if ! grep -qE "^[[:space:]]*(https?://)?${DOMAIN//./\\.}" "$CADDYFILE"; then
         echo "O Caddyfile já está inválido antes do newsloop mexer nele:"
         printf '%s\n' "$pre" | grep -E "^Error" | tail -1
@@ -245,7 +258,7 @@ case "$PROXY" in
       fi
     fi
     add_caddy_block "$CADDYFILE"
-    if ! out="$(caddy validate --config "$CADDYFILE" --adapter caddyfile 2>&1)"; then
+    if ! out="$(caddy_validate "$CADDYFILE")"; then
       err="$(printf '%s\n' "$out" | grep -E "^Error" | tail -1)"
       line="$(printf '%s' "$err" | grep -oP 'Caddyfile:\K[0-9]+' || true)"
       start="$(grep -nE "^[[:space:]]*(https?://)?${DOMAIN//./\\.}" "$CADDYFILE" | head -1 | cut -d: -f1)"
@@ -253,7 +266,7 @@ case "$PROXY" in
       if [ -n "$line" ] && [ -n "$start" ] && [ "$line" -lt "$start" ]; then
         echo "O erro está na linha $line, fora do bloco do newsloop (que começa na linha $start)."
         echo "O Caddyfile já tinha esse problema. O Caddy continua com a config atual: NÃO reinicie."
-        echo "Corrija a linha $line e rode: caddy validate --config $CADDYFILE && systemctl reload caddy"
+        echo "Corrija a linha $line e rode: systemctl reload caddy"
       else
         echo "O bloco do newsloop deixou o arquivo inválido; restaurando a cópia de segurança."
         cp "$(ls -t "$CADDYFILE".bak.* | head -1)" "$CADDYFILE"
